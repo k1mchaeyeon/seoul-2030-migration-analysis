@@ -37,3 +37,16 @@ for file in DATA_DIR.rglob("*"):
 
     except Exception as error:
         print("읽기 실패:", error)
+
+# 거주민 기준 연령별 취업자·고용률 원본 확인
+resident_file = (
+    "data/raw/resident_employment/"
+    "kosis_시군구_연령별_취업자_고용률_2021_2024.xlsx"
+)
+
+resident_raw = pd.read_excel(resident_file)
+
+print("\n[거주민 취업자·고용률 원본]")
+print("데이터 크기:", resident_raw.shape)
+print("컬럼:", resident_raw.columns.tolist())
+print(resident_raw.head(10).to_string())

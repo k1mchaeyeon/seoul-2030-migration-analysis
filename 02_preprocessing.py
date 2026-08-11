@@ -629,3 +629,179 @@ print(final_data.shape)
 
 print("\n최종 열 목록")
 print(final_data.columns.tolist())
+
+# ==================================================
+# 거주민 기준 연령별 취업자 수·고용률 전처리
+# ==================================================
+
+resident_file = (
+    "data/raw/resident_employment/"
+    "kosis_시군구_연령별_취업자_고용률_2021_2024.xlsx"
+)
+
+resident = pd.read_excel(resident_file)
+
+# 전체 연령 자료 제외
+resident = resident[
+    resident["연령별"].isin(["15 - 29세", "30 - 49세"])
+].copy()
+
+# 자치구명에서 '서울 ' 제거
+resident["자치구"] = (
+    resident["행정구역별"]
+    .str.replace("서울 ", "", regex=False)
+    .str.strip()
+)
+
+# 실제 반기 데이터 컬럼만 선택
+period_columns = [
+    col for col in resident.columns
+    if str(col).startswith(("2021.", "2022.", "2023.", "2024."))
+]
+
+# 반기별 컬럼만 세로 형태로 변환
+resident_long = resident.melt(
+    id_vars=["자치구", "항목", "연령별"],
+    value_vars=period_columns,
+    var_name="기간",
+    value_name="값"
+)
+
+# 기간에서 연도 4자리 추출
+resident_long["연도"] = (
+    resident_long["기간"]
+    .astype(str)
+    .str.extract(r"(\d{4})")[0]
+    .astype(int)
+)
+
+# '2021.1/2'에서 연도 추출
+resident_long["연도"] = (
+    resident_long["기간"]
+    .str[:4]
+    .astype(int)
+)
+
+# 숫자형 변환
+resident_long["값"] = pd.to_numeric(
+    resident_long["값"],
+    errors="coerce"
+)
+
+# 상반기와 하반기 값을 연평균으로 계산
+resident_yearly = (
+    resident_long
+    .groupby(
+        ["자치구", "연도", "항목", "연령별"],
+        as_index=False
+    )["값"]
+    .mean()
+)
+
+# 항목과 연령대를 결합해 컬럼명 생성
+column_names = {
+    ("취업자 (천명)", "15 - 29세"): "15_29세_취업자_천명",
+    ("취업자 (천명)", "30 - 49세"): "30_49세_취업자_천명",
+    ("고용률 (%)", "15 - 29세"): "15_29세_고용률",
+    ("고용률 (%)", "30 - 49세"): "30_49세_고용률",
+}
+
+resident_yearly["변수명"] = resident_yearly.apply(
+    lambda row: column_names[(row["항목"], row["연령별"])],
+    axis=1
+)
+
+# 연령·항목별 값을 각각의 컬럼으로 펼치기
+resident_processed = (
+    resident_yearly
+    .pivot(
+        index=["자치구", "연도"],
+        columns="변수명",
+        values="값"
+    )
+    .reset_index()
+)
+
+resident_processed.columns.name = None
+
+# 보기 좋은 컬럼 순서로 정리
+resident_processed = resident_processed[
+    [
+        "자치구",
+        "연도",
+        "15_29세_취업자_천명",
+        "15_29세_고용률",
+        "30_49세_취업자_천명",
+        "30_49세_고용률",
+    ]
+]
+
+# 소수점 한 자리로 정리
+value_columns = resident_processed.columns.drop(["자치구", "연도"])
+resident_processed[value_columns] = (
+    resident_processed[value_columns].round(1)
+)
+
+# 저장
+output_path = "data/processed/resident_employment_2021_2024.csv"
+
+resident_processed.to_csv(
+    output_path,
+    index=False,
+    encoding="utf-8-sig"
+)
+
+print("\n[거주민 취업자·고용률 전처리 완료]")
+print("데이터 크기:", resident_processed.shape)
+print(resident_processed.head(10).to_string(index=False))
+print("저장 위치:", output_path)
+
+# ⭐️ 기존 최종 데이터와 거주민 고용 데이터 병합 ⭐️
+
+# 병합 기준 열 이름 통일
+employment_for_merge = resident_processed.rename(
+    columns={"자치구": "자치구명"}
+)
+
+# 기존 최종 데이터와 병합
+final_with_employment = final_data.merge(
+    employment_for_merge,
+    on=["연도", "자치구명"],
+    how="left",
+    validate="one_to_one"
+)
+
+# 병합 결과 확인
+employment_columns = [
+    "15_29세_취업자_천명",
+    "15_29세_고용률",
+    "30_49세_취업자_천명",
+    "30_49세_고용률",
+]
+
+print("\n[고용 데이터 병합 완료]")
+print("최종 데이터 크기:", final_with_employment.shape)
+print(
+    "고용 데이터 결측치:\n",
+    final_with_employment[employment_columns].isna().sum()
+)
+
+print(
+    final_with_employment[
+        ["연도", "자치구명"] + employment_columns
+    ].head(10).to_string(index=False)
+)
+
+# 최종 파일 저장
+final_output_path = (
+    "data/processed/"
+    "seoul_youth_migration_final_2021_2024.csv"
+)
+
+final_with_employment.to_csv(
+    final_output_path,
+    index=False,
+    encoding="utf-8-sig"
+)
+
+print("최종 저장 위치:", final_output_path)
