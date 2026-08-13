@@ -1,695 +1,588 @@
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.ticker import StrMethodFormatter
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import streamlit as st
 
 
-# -----------------------------------------------------------------------------
-# 기본 설정
-# -----------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
-DATA_CANDIDATES = [
-    BASE_DIR / "data" / "processed" / "seoul_youth_final_2021_2024.csv",
-    BASE_DIR / "data" / "processed" / "seoul_youth_migration_analysis_2021_2024.csv",
-]
+DATA_PATH = BASE_DIR / "data" / "processed" / "seoul_youth_master.csv"
 
-INFLOW = "#3F6F9F"
-OUTFLOW = "#B85C5C"
-ACCENT = "#315A7D"
-MUTED = "#B8C1CC"
-TEXT = "#28323C"
-GRID = "#E8EBEF"
-JOB = "#657D61"
-HOUSING = "#8A6F58"
+BLUE = "#3976A8"
+RED = "#C45F52"
+YELLOW = "#D7A83F"
+DARK = "#26333D"
+TEXT = "#5B6974"
+GRID = "#E8EDF1"
+COLORS = ["#3976A8", "#C97945", "#5B8E71", "#8A6F9E", "#B4953F"]
 
-st.set_page_config(
-    page_title="서울 청년 인구이동 분석",
-    page_icon="🏙️",
-    layout="wide",
-)
+st.set_page_config(page_title="서울 20·30대 순이동 비교 대시보드", page_icon="🏙️", layout="wide")
+plt.rcParams.update({
+    "font.family": "AppleGothic",
+    "axes.unicode_minus": False,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+})
 
-sns.set_theme(style="whitegrid")
-plt.rcParams["font.family"] = ["AppleGothic", "Malgun Gothic", "NanumGothic", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
+st.markdown("""
+<style>
+.stApp {background:#F5F7F9;}
+[data-testid="stHeader"], [data-testid="stToolbar"] {display:none;}
+.block-container {max-width:1540px; padding:1.35rem 1.8rem 2.4rem;}
+h1,h2,h3 {color:#26333D; letter-spacing:-.035em;}
+h1 {font-size:2.35rem !important; margin-bottom:.55rem !important;}
+h2 {font-size:1rem !important; margin:0 !important;}
+[data-testid="stCaptionContainer"] {color:#75828D; font-size:1.05rem;}
+[data-testid="stMetric"] {
+    background:#FFFFFF; border:1px solid #DFE5EA; border-radius:10px;
+    padding:12px 14px; min-height:102px; box-shadow:none;
+}
+[data-testid="stMetricLabel"] {font-size:.78rem; color:#73808A;}
+[data-testid="stMetricValue"] {font-size:1.25rem; color:#26333D;}
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background:#FFFFFF !important; border-color:#D7E0E7 !important; border-radius:20px !important;
+    padding:10px 14px;
+}
+[data-testid="stVerticalBlockBorderWrapper"] > div {background:#FFFFFF !important; border-radius:18px;}
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(h4) {
+    background:#FFFFFF !important;
+    border:1px solid #D7E0E7 !important;
+    border-radius:20px !important;
+    padding:18px 22px 20px !important;
+    box-shadow:none !important;
+    height:100% !important;
+}
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(h4) img {
+    border-radius:14px !important;
+}
+[data-testid="stHorizontalBlock"]:has(h4) {
+    align-items:stretch !important;
+}
+[data-testid="stHorizontalBlock"]:has(h4) > [data-testid="stColumn"] {
+    display:flex !important;
+}
+[data-testid="stHorizontalBlock"]:has(h4) > [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"]:has(h4) > [data-testid="stColumn"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] {
+    width:100% !important;
+    height:100% !important;
+}
+.flow {display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:nowrap; margin-top:.05rem;}
+.flow span {background:#E6F0F6; color:#3E647D; padding:14px 18px; border-radius:30px; font-size:.92rem; font-weight:700; white-space:nowrap;}
+.flow .arrow {background:transparent; padding:0; color:#7F9CB0; font-size:1.35rem;}
+.filter-title {font-size:.72rem; color:#6D7A84; margin-bottom:2px;}
+.static-label {font-size:1rem; color:#65737E; margin:.05rem 0 .55rem;}
+.static-filter {height:64px; border:1px solid #D4DEE6; border-radius:13px; background:#FFFFFF; padding:17px 20px; color:#26333D; font-size:1.08rem; display:flex; justify-content:space-between; align-items:center;}
+.kpi-grid {display:grid; gap:12px; margin:14px 0;}
+.kpi-card {background:#FFFFFF; border:1px solid #D7E0E7; border-radius:16px; padding:18px 20px; min-height:170px; position:relative;}
+.kpi-card.focus {border-color:#E78A7B; box-shadow:inset 0 3px 0 #E45F43;}
+.kpi-label {font-size:1.05rem; color:#26333D; font-weight:750; margin-bottom:15px;}
+.kpi-main {display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.kpi-main > div + div {border-left:1px solid #E1E7EB; padding-left:16px;}
+.kpi-caption {font-size:.78rem; color:#74818B; margin-bottom:7px;}
+.kpi-value {font-size:1.62rem; font-weight:700; color:#26333D; line-height:1.25; word-break:keep-all;}
+.kpi-value.negative {color:#E45F43;}
+.kpi-value.positive {color:#1767B7;}
+.kpi-detail {display:flex; gap:8px 14px; flex-wrap:wrap; margin-top:16px; color:#667681; font-size:.88rem;}
+.kpi-detail b {color:#36444E;}
+.kpi-compare {display:grid; gap:12px;}
+.kpi-age-row {display:grid; grid-template-columns:48px 1fr 1fr; align-items:center; gap:12px; padding:10px 0; border-top:1px solid #E8EDF1;}
+.kpi-age-row:first-child {border-top:0; padding-top:0;}
+.kpi-age-label {font-size:.86rem; font-weight:750; color:#40505C;}
+.kpi-age-value {font-size:1.1rem; font-weight:700; line-height:1.25;}
+.kpi-age-value.negative {color:#E45F43;}
+.kpi-age-value.positive {color:#1767B7;}
+.kpi-age-meta {font-size:.75rem; color:#74818B; margin-top:3px;}
+.focus-badge {position:absolute; right:16px; top:14px; padding:4px 10px; border:1px solid #E45F43; border-radius:7px; color:#D9442E; background:#FFF7F5; font-size:.78rem; font-weight:700;}
+.section-head {display:flex; align-items:center; gap:12px; margin:17px 0 9px; color:#183D67; font-weight:750; font-size:1.12rem;}
+.section-no {background:#123F73; color:#FFFFFF; border-radius:7px; padding:6px 10px; font-size:1rem; letter-spacing:.03em;}
+.panel-question {font-size:.95rem; color:#728291; margin:4px 0 14px;}
+.policy-grid {display:grid; gap:12px; margin-top:0;}
+.policy-card {background:#FFFFFF; border:1px solid #D7E0E7; border-radius:16px; padding:18px 20px; min-height:var(--policy-min-height, 265px); position:relative;}
+.policy-card.focus {border-color:#E78A7B; box-shadow:inset 0 3px 0 #E45F43;}
+.policy-name {font-size:1.15rem; font-weight:780; color:#23323C; padding-bottom:10px; border-bottom:1px solid #E5EAEE;}
+.policy-type {font-size:.82rem; color:#5E6D78; margin:9px 0 10px;}
+.policy-title {font-size:.9rem; font-weight:750; margin:8px 0 5px;}
+.policy-clues {font-size:.84rem; color:#586772; line-height:1.55; min-height:76px;}
+.policy-tags {display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+.policy-tag {display:inline-block; padding:7px 10px; border-radius:8px; background:#E7F1F6; color:#2F6686; font-size:.8rem; font-weight:700;}
+.insight-box {margin:15px 0 2px; padding:16px 19px; border-left:4px solid #3976A8; border-radius:9px; background:#EDF4F8; color:#354651; font-size:.94rem; line-height:1.55;}
+.insight-box b {color:#174D75;}
+.footnote {font-size:.74rem; color:#6F7D87; margin-top:14px; padding:11px 14px; border:1px solid #D7E0E7; border-radius:10px; background:#FFFFFF; text-align:center;}
+div[data-testid="stSelectbox"], div[data-testid="stMultiSelect"] {background:transparent;}
+div[data-baseweb="select"] > div {min-height:58px; border-radius:12px !important; border:1px solid #D4DEE6 !important; background:#F8FAFB !important; font-size:1.02rem; padding-left:10px; box-shadow:none !important;}
+div[data-testid="stSelectbox"] label, div[data-testid="stMultiSelect"] label {font-size:1rem; color:#65737E; padding-bottom:.35rem;}
+span[data-tag] {background:#E6F0F6 !important; color:#315F7B !important; border-radius:9px !important;}
+span[data-tag] button {color:#315F7B !important;}
+[role="listbox"][aria-label^="자치구 복수 선택"] [role="presentation"]:has(> [data-key="__select_all__"]) {display:none !important;}
+[role="listbox"][aria-label^="자치구 복수 선택"] [role="presentation"]:has(> [data-key="__select_all__"]) ~ [role="presentation"] {margin-top:-40px !important;}
+[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] {align-items:flex-end; gap:18px;}
+[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stColumn"] {min-width:0;}
+[data-testid="stPopover"] button {width:58px !important; min-width:58px !important; max-width:58px !important; height:58px; min-height:58px; padding:0 !important; border:1px solid #D4DEE6; border-radius:50%; background:#F8FAFB; color:#315F7B; font-size:1.2rem; font-weight:800; box-shadow:none;}
+[data-testid="stPopover"] button:hover {border-color:#8FAFC3; color:#174D75;}
+@media(max-width:800px) {.kpi-grid,.policy-grid {grid-template-columns:1fr !important;} .block-container {padding-top:4rem;} .kpi-main {grid-template-columns:1fr;} .kpi-main > div + div {border-left:0; padding-left:0;}}
+</style>
+""", unsafe_allow_html=True)
 
-st.markdown(
-    """
-    <style>
-    .block-container {max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem;}
-    h1, h2, h3 {color:#28323C; letter-spacing:-0.025em;}
-    [data-testid="stMetric"] {
-        background:#FFFFFF; border:1px solid #E3E7EB; border-radius:8px;
-        padding:11px 14px; min-height:112px; box-shadow:none;
-    }
-    [data-testid="stMetricLabel"] {color:#67727E; font-size:.82rem;}
-    [data-testid="stMetricValue"] {color:#28323C; font-size:1.65rem; font-weight:750;}
-    [data-testid="stAlert"] {border-radius:7px; box-shadow:none;}
-    .current-filter {
-        padding:12px 16px; background:#F4F6F8; border-left:4px solid #315A7D;
-        color:#34404B; margin:.5rem 0 1.5rem;
-    }
-    .result-box {
-        padding:15px 18px; background:#EEF4F8; border-left:4px solid #3F6F9F;
-        border-radius:6px; color:#28323C; line-height:1.65; margin:.6rem 0 1rem;
-    }
-    .policy-box {
-        padding:15px 18px; background:#F5F5F2; border-left:4px solid #657D61;
-        border-radius:6px; color:#28323C; line-height:1.65; margin:.6rem 0 1rem;
-    }
-    hr {margin:2.3rem 0; border-color:#E8EBEF;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+
+@st.cache_data
+def load_data(path, modified_ns):
+    # modified_ns를 캐시 키에 포함해 전처리 CSV가 바뀌면 자동으로 다시 읽는다.
+    _ = modified_ns
+    return pd.read_csv(path)
 
 
-# -----------------------------------------------------------------------------
-# 공통 함수
-# -----------------------------------------------------------------------------
-def style_axis(ax, title, xlabel="", ylabel="", grid_axis="both"):
-    ax.set_title(title, loc="left", fontsize=14, fontweight="bold", color=TEXT, pad=14)
-    ax.set_xlabel(xlabel, labelpad=9)
-    ax.set_ylabel(ylabel, labelpad=9)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["left", "bottom"]].set_color("#C8CED5")
+def clean_axis(ax, grid="both"):
+    ax.set_facecolor("white")
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.spines["bottom"].set_color("#BEC7CE")
     ax.grid(False)
-    ax.grid(axis=grid_axis, color=GRID, linewidth=.8)
+    ax.grid(axis=grid, color=GRID, linewidth=.8)
+    ax.tick_params(axis="both", length=0, colors=TEXT, labelsize=8)
     ax.set_axisbelow(True)
 
 
-def migration_status(value):
-    if value > 0:
-        return "순유입"
-    if value < 0:
-        return "순유출"
-    return "순이동 없음"
-
-
-def corr_strength(value):
-    if pd.isna(value):
-        return "계산 불가"
-    value = abs(value)
-    if value < .2:
-        return "거의 관계 없음"
-    if value < .4:
-        return "약한 관계"
-    if value < .6:
-        return "보통 관계"
-    if value < .8:
-        return "강한 관계"
-    return "매우 강한 관계"
-
-
-def corr_direction(value):
-    if pd.isna(value) or abs(value) < .001:
-        return "뚜렷한 방향 없음"
-    return "양의 관계" if value > 0 else "음의 관계"
-
-
-def safe_corr(frame, x, y):
-    valid = frame[[x, y]].replace([np.inf, -np.inf], np.nan).dropna()
-    if len(valid) < 3 or valid[x].nunique() < 2 or valid[y].nunique() < 2:
-        return np.nan
-    return valid[x].corr(valid[y])
-
-
-def pct_difference(top_value, bottom_value):
-    if pd.isna(bottom_value) or bottom_value == 0:
-        return np.nan
-    return (top_value - bottom_value) / abs(bottom_value) * 100
-
-
-def add_point_labels(ax, frame, x, y, names, limit=None):
-    label_frame = frame.copy()
-    if limit and len(label_frame) > limit:
-        label_frame["_distance"] = (
-            (label_frame[x] - label_frame[x].median()).abs() / (label_frame[x].std() or 1)
-            + (label_frame[y] - label_frame[y].median()).abs() / (label_frame[y].std() or 1)
-        )
-        label_frame = label_frame.nlargest(limit, "_distance")
-    for _, row in label_frame.iterrows():
-        ax.annotate(
-            row[names], (row[x], row[y]), xytext=(4, 4),
-            textcoords="offset points", fontsize=8, color=TEXT,
-        )
-
-
-def classify_migration(row):
-    age20 = row["20대인구천명당순이동자수"]
-    age30 = row["30대인구천명당순이동자수"]
-    if pd.isna(age20) or pd.isna(age30):
-        return "자료 없음"
-    if age20 >= 0 and age30 >= 0:
+def movement_type(row):
+    a20, a30 = row["20대순이동률"], row["30대순이동률"]
+    if a20 >= 0 and a30 >= 0:
         return "20·30대 동반 유입형"
-    if age20 >= 0 and age30 < 0:
+    if a20 >= 0 and a30 < 0:
         return "20대 유입·30대 유출형"
-    if age20 < 0 and age30 >= 0:
+    if a20 < 0 and a30 >= 0:
         return "20대 유출·30대 유입형"
     return "20·30대 동반 유출형"
 
 
-@st.cache_data
-def load_data():
-    path = next((candidate for candidate in DATA_CANDIDATES if candidate.exists()), None)
-    if path is None:
-        st.error(
-            "분석 CSV를 찾을 수 없습니다. `02_preprocessing.py`를 먼저 실행한 뒤 "
-            "결과 파일을 `data/processed` 폴더에 넣어 주세요."
-        )
-        st.stop()
-
-    frame = pd.read_csv(path)
-
-    required = {
-        "연도", "자치구명", "20대순이동자수", "30대순이동자수",
-        "20대인구천명당순이동자수", "30대인구천명당순이동자수",
-        "전월세월환산주거비중앙값_만원", "전월세거래건수",
-        "종사자수", "전체주민등록인구", "일자리집중도_인구천명당종사자수",
-        "15_29세_고용률", "30_49세_고용률",
-    }
-    missing = sorted(required - set(frame.columns))
-    if missing:
-        st.error(
-            "최종 대시보드에 필요한 컬럼이 없습니다: " + ", ".join(missing)
-            + "\n\n수정된 `02_preprocessing.py`로 데이터를 다시 생성해 주세요."
-        )
-        st.stop()
-
-    frame["연도"] = pd.to_numeric(frame["연도"], errors="coerce").astype("Int64")
-    frame = frame[frame["연도"].between(2021, 2024)].copy()
-    return frame
+def rate_description(rate):
+    if rate > 0:
+        return f"{abs(rate):.1f}명 순유입", f"인구 대비 약 {abs(rate) / 10:.2f}% 순유입"
+    if rate < 0:
+        return f"{abs(rate):.1f}명 순유출", f"인구 대비 약 {abs(rate) / 10:.2f}% 순유출"
+    return "순이동 없음", "인구 대비 0.00%"
 
 
-data = load_data()
+def policy_diagnosis(row, history, year_data, selected_age):
+    out20 = int((history["20대순이동률"] < 0).sum())
+    out30 = int((history["30대순이동률"] < 0).sum())
+    clues = []
+    policies = []
+
+    if row["전세환산주거비중앙값_만원"] >= year_data["전세환산주거비중앙값_만원"].median():
+        clues.append("전세환산 주거비가 서울 중앙값 이상")
+        policies.append("정착형 주택" if row["30대순이동률"] < 0 else "주거비 지원")
+    if selected_age == "20대":
+        selected_outflow = row["20대순이동률"] < 0
+    elif selected_age == "30대":
+        selected_outflow = row["30대순이동률"] < 0
+    else:
+        selected_outflow = row["20대순이동률"] < 0 or row["30대순이동률"] < 0
+
+    if row["종사자수"] < year_data["종사자수"].median():
+        clues.append("사업체 종사자수(절대값)가 서울 중앙값 미만")
+        if selected_outflow:
+            policies.extend(["지역 일자리 연계", "업무지 접근성 개선"])
+    elif selected_outflow:
+        clues.append("사업체 종사자수는 서울 중앙값 이상이지만 순유출 발생")
+        policies.extend(["직주 불일치 점검", "통근·주거 연계"])
+    employment_columns = []
+    if selected_age in ["20대", "20대·30대 비교"]:
+        employment_columns.append(("15_29세_고용률", "20대 참고 고용률(15–29세)"))
+    if selected_age in ["30대", "20대·30대 비교"]:
+        employment_columns.append(("30_49세_고용률", "30대 참고 고용률(30–49세)"))
+    for column, label in employment_columns:
+        if row[column] < year_data[column].median():
+            clues.append(f"{label}이 서울 중앙값 미만")
+            policies.append("취업 연계")
+    if row["20대순이동률"] >= 0 and row["30대순이동률"] < 0:
+        policies.append("가족형 주거")
+
+    clue_text = ", ".join(clues) if clues else "주거·고용 지표가 서울 중간 수준과 유사"
+    policy_list = list(dict.fromkeys(policies)) or ["유입 여건 유지", "지표 변화 모니터링"]
+    return out20, out30, clue_text, policy_list
 
 
-# -----------------------------------------------------------------------------
-# 0. 필터
-# -----------------------------------------------------------------------------
-st.title("서울 청년 인구이동 분석 대시보드")
-st.caption(
-    "서울 25개 자치구의 20대·30대 순이동과 전월세 주거비·고용·일자리 환경을 "
-    "비교하여 정책 우선 검토 지역을 찾습니다."
-)
+def get_condition_metrics(selected_age):
+    metrics = [("전세환산주거비중앙값_만원", "전세환산 주거비 중앙값", "만원")]
+    if selected_age in ["20대", "20대·30대 비교"]:
+        metrics.append(("15_29세_고용률", "20대 참고 고용률(15–29세)", "%"))
+    if selected_age in ["30대", "20대·30대 비교"]:
+        metrics.append(("30_49세_고용률", "30대 참고 고용률(30–49세)", "%"))
+    metrics.append(("종사자수", "사업체 종사자수(절대값)", "명"))
+    return metrics
 
-years = sorted(data["연도"].dropna().astype(int).unique())
-districts = sorted(data["자치구명"].dropna().unique())
 
-filter1, filter2, filter3 = st.columns([1, 1, 1.5])
-with filter1:
-    selected_year = st.selectbox("기준 연도", years, index=len(years) - 1)
-with filter2:
-    selected_age = st.selectbox("연령대", ["20대", "30대"])
-with filter3:
-    selected_factor = st.selectbox(
-        "분석 지표",
-        ["전월세 월환산 주거비", "고용률", "일자리 집중도"],
+if not DATA_PATH.exists():
+    st.error("분석 데이터를 찾을 수 없습니다. `python 02_preprocessing.py`를 먼저 실행해 주세요.")
+    st.stop()
+
+data = load_data(str(DATA_PATH), DATA_PATH.stat().st_mtime_ns)
+required_columns = {
+    "연도", "자치구명", "20대순이동자수", "30대순이동자수", "청년순이동자수",
+    "20대순이동률", "30대순이동률", "청년순이동률", "전세환산주거비중앙값_만원",
+    "종사자수", "15_29세_고용률", "30_49세_고용률",
+}
+missing_columns = sorted(required_columns - set(data.columns))
+if missing_columns:
+    st.error("전처리 데이터가 이전 형식입니다. 터미널에서 `python 02_preprocessing.py`를 한 번 실행해 주세요.")
+    st.caption("부족한 열: " + ", ".join(missing_columns))
+    st.stop()
+years = sorted(data["연도"].unique())
+districts = sorted(data["자치구명"].unique())
+
+head_left, head_right = st.columns([1.3, 1])
+with head_left:
+    st.title("서울 20·30대 순이동 비교 대시보드")
+    st.caption("선택한 자치구의 순이동과 주거비·고용 환경을 비교해 먼저 살펴볼 항목을 찾습니다")
+with head_right:
+    st.markdown(
+        '<div class="flow"><span>① 현상 발견</span><span class="arrow">→</span><span>② 지속성 비교</span>'
+        '<span class="arrow">→</span><span>③ 관련 여건 비교</span><span class="arrow">→</span><span>④ 우선 검토</span></div>',
+        unsafe_allow_html=True,
     )
 
+with st.container(border=True):
+    f1, f2, f3, f4 = st.columns([1, 1.25, 2.5, .42])
+    with f1:
+        selected_year = st.selectbox(
+            "기준 연도", years, index=len(years) - 1,
+            help="선택한 연도로 KPI, 지역 여건, 상관관계를 다시 계산합니다.",
+        )
+    with f2:
+        selected_age = st.selectbox(
+            "연령대", ["20대", "30대", "20대·30대 비교"], index=2,
+            help="비교 모드에서는 20대와 30대의 순이동자수·순이동률·서울 순위를 합치지 않고 각각 보여줍니다.",
+        )
+    with f3:
+        selected_districts = st.multiselect(
+            "자치구 복수 선택", districts,
+            default=["노원구", "양천구", "관악구"], max_selections=4,
+            placeholder="최대 4개 자치구 선택",
+            help="1~4개 자치구를 같은 기준으로 비교합니다. 선택 구는 KPI·추이·여건·검토카드에 모두 반영됩니다.",
+        )
+    with f4:
+        st.markdown('<div class="static-label">지표 안내</div>', unsafe_allow_html=True)
+        with st.popover("?"):
+            st.markdown("##### 지표 정의·계산식")
+            st.markdown("""
+**순이동자수(명)**  
+= 전입자수 − 전출자수. 양수는 순유입, 음수는 순유출입니다.
+
+**연령대 기준**  
+20대=20–29세, 30대=30–39세입니다. 비교 모드는 두 연령대 값을 합산하지 않고 나란히 보여줍니다.
+
+**연앙인구(명)**  
+= (전년도 12월 인구 + 해당 연도 12월 인구) ÷ 2.
+
+**순이동률(‰)**  
+= 순이동자수 ÷ 같은 연령대 연앙인구 × 1,000.  
+‰는 인구 1,000명당 몇 명이 순유입·순유출됐는지를 뜻합니다.
+예: -19.9‰는 `인구 1,000명당 19.9명 순유출`, 인구 대비 약 1.99% 순유출을 뜻합니다.
+
+**전세환산 주거비(만원)**  
+• 전세 계약 = 보증금  
+• 월세 계약 = 보증금 + (월세 × 12 ÷ 0.05)  
+각 계약을 먼저 환산한 뒤 연도·자치구별 **중앙값**을 사용합니다. 5.0%는 연도 간 비교를 위한 고정 분석 가정이며 법정 상한이나 개별 계약의 실제 전환율을 뜻하지 않습니다.
+[전월세전환율 공식 근거·한국부동산원](https://www.reb.or.kr/reb/cm/cntnts/cntntsView.do?cntntsId=1190&mi=9808)
+
+**전세환산 주거비 산출 거래건수(건)**  
+= 위 계산에 사용한 유효한 전세·월세 계약 수. 전세는 보증금 0 초과, 월세는 임대료 0 초과 계약만 사용합니다.
+
+**고용률(%)**  
+20대 참고지표는 15–29세, 30대 참고지표는 30–49세입니다. 연간값은 (상반기 고용률 + 하반기 고용률) ÷ 2입니다. 순이동 연령과 정확히 같지 않아 해석 단서로만 사용합니다.
+
+**사업체 종사자수(명)**  
+= 해당 자치구 사업체에 근무하는 종사자수의 합계. 전체 연령·근무지 기준 절대값이며 별도 비율을 계산하지 않습니다.
+
+**서울 중앙값**  
+= 해당 연도 25개 자치구 값의 중앙값.
+
+**서울 순위**  
+= 선택 연령대 순이동률을 내림차순으로 나열한 순위. 순유입률이 높을수록 1위에 가깝습니다.
+
+**집중 확인 대상**  
+= 선택한 자치구 중 실제 순유출이 발생했고 순이동률이 가장 낮은 구. 비교 모드에서는 20대·30대 중 더 낮은 순이동률로 판단합니다. 선택 구가 모두 순유입이면 집중 확인 대상을 지정하지 않습니다.
+
+**이동 유형**  
+20대·30대 순이동률의 양·음 조합으로 `동반 유입`, `20대 유입·30대 유출`, `20대 유출·30대 유입`, `동반 유출`로 구분합니다. 0 이상은 유입, 0 미만은 유출로 판정합니다.
+
+**최근 3년 지속성**  
+= 선택 연도를 포함한 최근 3개 연도 중 순이동률이 0 미만인 연도 수. 2021·2022년을 선택하면 확보된 연도만 사용합니다.
+
+**Pearson 상관계수 r**  
+= cov(X,Y) ÷ (σX×σY). -1~1 범위의 선형 관련성이며, 개인의 이사 원인이나 정책 효과를 증명하지 않습니다.
+산점도는 현재 선택 연령·연도에서 비교 지표 중 |r|이 가장 큰 하나를 자동 표시합니다.
+
+**우선 검토 항목**  
+선택 구 값을 서울 25개 구 중앙값과 비교해 만든 탐색 순서입니다. 인과적 처방이나 정책 효과를 뜻하지 않습니다.
+            """)
+
+if not selected_districts:
+    st.warning("비교할 자치구를 하나 이상 선택해 주세요.")
+    st.stop()
+
+year_data = data[data["연도"] == selected_year].copy()
+selected_rows = year_data[year_data["자치구명"].isin(selected_districts)].copy()
+if selected_age == "20대":
+    count_col, rate_col = "20대순이동자수", "20대순이동률"
+elif selected_age == "30대":
+    count_col, rate_col = "30대순이동자수", "30대순이동률"
+else:
+    count_col, rate_col = None, None
+
+metrics = get_condition_metrics(selected_age)
+if selected_age == "20대·30대 비교":
+    relation_specs = [
+        ("전세환산주거비중앙값_만원", "전세환산 주거비 중앙값", "만원", "20대순이동률", "20대"),
+        ("15_29세_고용률", "20대 참고 고용률(15–29세)", "%", "20대순이동률", "20대"),
+        ("종사자수", "사업체 종사자수(절대값)", "명", "20대순이동률", "20대"),
+        ("전세환산주거비중앙값_만원", "전세환산 주거비 중앙값", "만원", "30대순이동률", "30대"),
+        ("30_49세_고용률", "30대 참고 고용률(30–49세)", "%", "30대순이동률", "30대"),
+        ("종사자수", "사업체 종사자수(절대값)", "명", "30대순이동률", "30대"),
+    ]
+else:
+    relation_specs = [(column, name, unit, rate_col, selected_age) for column, name, unit in metrics]
+
+relation_results = []
+for column, name, unit, related_rate_col, related_age in relation_specs:
+    relation_results.append((abs(year_data[column].corr(year_data[related_rate_col])), column, name, unit, related_rate_col, related_age))
+_, relation_column, relation_name, relation_unit, relation_rate_col, relation_age_label = max(relation_results, key=lambda item: item[0])
+corr = year_data[relation_column].corr(year_data[relation_rate_col])
+age_label = selected_age
+
+if selected_age == "20대·30대 비교":
+    selected_rows["집중진단률"] = selected_rows[["20대순이동률", "30대순이동률"]].min(axis=1)
+    selected_rows["집중진단연령"] = np.where(
+        selected_rows["20대순이동률"] <= selected_rows["30대순이동률"], "20대", "30대"
+    )
+    target = selected_rows.sort_values("집중진단률").iloc[0]
+    target_rate = target["집중진단률"]
+    target_age_label = target["집중진단연령"]
+else:
+    target = selected_rows.sort_values(rate_col).iloc[0]
+    target_rate = target[rate_col]
+    target_age_label = selected_age
+focus_enabled = target_rate < 0
+target_name = target["자치구명"]
+district_colors = {district: COLORS[i] for i, district in enumerate(selected_districts)}
+available_years = [year for year in years if year <= selected_year]
+recent_years = available_years[-3:]
+
+st.markdown('<div class="section-head"><span class="section-no">01</span> 선택 자치구 이동 현황</div>', unsafe_allow_html=True)
+kpi_cards = []
+for district in selected_districts:
+    row = selected_rows[selected_rows["자치구명"] == district].iloc[0]
+    focus = focus_enabled and district == target_name
+    if selected_age == "20대·30대 비교":
+        age_rows = []
+        for short_age, age_count_col, age_rate_col in [
+            ("20대", "20대순이동자수", "20대순이동률"),
+            ("30대", "30대순이동자수", "30대순이동률"),
+        ]:
+            age_rate = row[age_rate_col]
+            age_rank = int((year_data[age_rate_col] > age_rate).sum() + 1)
+            age_class = "negative" if age_rate < 0 else "positive"
+            age_rate_text, age_percent_text = rate_description(age_rate)
+            age_rows.append(
+                f'<div class="kpi-age-row"><div class="kpi-age-label">{short_age}</div>'
+                f'<div><div class="kpi-age-value {age_class}">{row[age_count_col]:+,.0f}명</div>'
+                f'<div class="kpi-age-meta">순이동자수</div></div>'
+                f'<div><div class="kpi-age-value {age_class}">{age_rate_text}</div>'
+                f'<div class="kpi-age-meta">{age_percent_text} · 서울 {age_rank}위</div></div></div>'
+            )
+        kpi_body = f'<div class="kpi-compare">{"".join(age_rows)}</div>'
+        kpi_detail = f'<div class="kpi-detail"><span>{movement_type(row)}</span></div>'
+    else:
+        row_rank = int((year_data[rate_col] > row[rate_col]).sum() + 1)
+        value_class = "negative" if row[rate_col] < 0 else "positive"
+        rate_text, rate_percent_text = rate_description(row[rate_col])
+        kpi_body = (
+            f'<div class="kpi-main"><div><div class="kpi-caption">{selected_year} {age_label} 순이동자수(명)</div>'
+            f'<div class="kpi-value {value_class}">{row[count_col]:+,.0f}명</div></div>'
+            f'<div><div class="kpi-caption">{age_label} 인구 1,000명당</div>'
+            f'<div class="kpi-value {value_class}">{rate_text}</div></div></div>'
+        )
+        kpi_detail = f'<div class="kpi-detail"><span>{rate_percent_text}</span><span>서울 <b>{row_rank}위</b></span><span>{movement_type(row)}</span></div>'
+    kpi_cards.append(
+        f'<div class="kpi-card {"focus" if focus else ""}">'
+        f'{"<span class=\"focus-badge\">집중 확인</span>" if focus else ""}'
+        f'<div class="kpi-label">{district}</div>{kpi_body}{kpi_detail}</div>'
+    )
 st.markdown(
-    f'<div class="current-filter">현재 분석 기준: <b>{selected_year}년 · '
-    f'{selected_age} · {selected_factor}</b></div>',
+    f'<div class="kpi-grid" style="grid-template-columns:repeat({len(kpi_cards)}, minmax(0, 1fr));">'
+    + "".join(kpi_cards) + '</div>',
     unsafe_allow_html=True,
 )
 
-year_data = data[data["연도"] == selected_year].copy()
-if selected_age == "20대":
-    count_col = "20대순이동자수"
-    rate_col = "20대인구천명당순이동자수"
-    employment_col = "15_29세_고용률"
-    employment_name = "15~29세 고용률"
+st.markdown('<div class="section-head"><span class="section-no">02</span> 지속성과 지역 여건 비교</div>', unsafe_allow_html=True)
+trend_col, condition_col = st.columns([1, 1.08])
+with trend_col:
+    with st.container(border=True):
+        st.markdown("#### 2021–2024 순이동률 추이")
+        st.markdown('<div class="panel-question">선택한 자치구별 방향성과 20·30대 차이를 확인합니다</div>', unsafe_allow_html=True)
+        district_count = len(selected_districts)
+        ncols = min(district_count, 2)
+        nrows = int(np.ceil(district_count / ncols))
+        trend_height = 3.8 if nrows == 1 else 5.1
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6.2, trend_height), squeeze=False, sharex=True)
+        axes = axes.ravel()
+        for i, district in enumerate(selected_districts):
+            ax = axes[i]
+            history = data[(data["자치구명"] == district) & (data["연도"] <= selected_year)].sort_values("연도")
+            if selected_age == "20대·30대 비교":
+                ax.plot(history["연도"], history["20대순이동률"], marker="o", linewidth=2, markersize=4.5, color=BLUE, label="20대")
+                ax.plot(history["연도"], history["30대순이동률"], marker="o", linewidth=2, markersize=4.5, color="#E16448", linestyle="--", label="30대")
+            else:
+                color = BLUE if selected_age == "20대" else "#E16448"
+                ax.plot(history["연도"], history[rate_col], marker="o", linewidth=2.2, markersize=4.5, color=color, label=selected_age)
+            ax.axhline(0, color="#9DB0BE", linewidth=.9, linestyle=(0, (3, 3)))
+            ax.set_title(district, loc="left", fontsize=10, fontweight="bold", color=district_colors[district], pad=4)
+            ax.set_xticks(available_years)
+            ax.set_ylabel("인구 1,000명당 순이동(명)", fontsize=8)
+            clean_axis(ax)
+            ax.spines["bottom"].set_visible(False)
+        for ax in axes[district_count:]:
+            ax.set_visible(False)
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, frameon=False, ncol=2, fontsize=8.5, loc="upper right", bbox_to_anchor=(.98, .99))
+        fig.tight_layout(pad=1.1, rect=(0, 0, 1, .94))
+        st.pyplot(fig, width="stretch")
+        plt.close(fig)
+
+with condition_col:
+    with st.container(border=True):
+        st.markdown(f"#### 지역 여건 비교 ({selected_year})")
+        st.markdown('<div class="panel-question">선택한 자치구의 실제 값을 서울 중앙값과 나란히 비교합니다</div>', unsafe_allow_html=True)
+        condition_height = trend_height
+        fig, axes = plt.subplots(len(metrics), 1, figsize=(6.5, condition_height), squeeze=False)
+        axes = axes.ravel()
+        offsets = np.linspace(-.16, .16, len(selected_districts))
+        for ax, (column, name, unit) in zip(axes, metrics):
+            values = year_data[column]
+            median = values.median()
+            span = values.max() - values.min()
+            pad = max(span * .12, abs(median) * .03, .5)
+            ax.axvline(median, color=YELLOW, linewidth=2, zorder=1)
+            for offset, district in zip(offsets, selected_districts):
+                value = selected_rows.loc[selected_rows["자치구명"] == district, column].iloc[0]
+                ax.scatter(value, offset, s=55, color=district_colors[district], edgecolor="white", linewidth=.8, zorder=3)
+            ax.set_xlim(values.min() - pad, values.max() + pad)
+            ax.set_ylim(-.34, .34)
+            ax.set_yticks([])
+            ax.set_title(f"{name} ({unit})", loc="left", fontsize=9, fontweight="bold", color=DARK, pad=2)
+            clean_axis(ax, grid="x")
+            ax.spines["bottom"].set_visible(False)
+            ax.xaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}" if unit != "%" else "{x:.1f}"))
+        legend_handles = [
+            Line2D([0], [0], marker="o", color="none", markerfacecolor=district_colors[d], markeredgecolor="white", markersize=7, label=d)
+            for d in selected_districts
+        ]
+        legend_handles.append(Line2D([0], [0], color=YELLOW, linewidth=2, label="서울 중앙값"))
+        fig.legend(handles=legend_handles, frameon=False, ncol=min(3, len(legend_handles)), fontsize=8, loc="upper right", bbox_to_anchor=(.98, .995))
+        fig.tight_layout(pad=.85, h_pad=.75, rect=(0, 0, 1, .92))
+        st.pyplot(fig, width="stretch")
+        plt.close(fig)
+
+direction = "양의" if corr > 0 else "음의"
+target_rate_text, target_percent_text = rate_description(target_rate)
+if focus_enabled:
+    focus_message = (
+        f'선택 구 중 <b>{target_name}</b>의 {target_age_label}가 인구 1,000명당 '
+        f'<b>{target_rate_text}</b>({target_percent_text})로 가장 낮아 우선 확인 대상입니다.'
+    )
 else:
-    count_col = "30대순이동자수"
-    rate_col = "30대인구천명당순이동자수"
-    employment_col = "30_49세_고용률"
-    employment_name = "30~49세 고용률"
-
-factor_map = {
-    "전월세 월환산 주거비": (
-        "전월세월환산주거비중앙값_만원", "전월세 월환산 주거비 중앙값(만원/월)"
-    ),
-    "고용률": (employment_col, f"거주지 기준 {employment_name}(%)"),
-    "일자리 집중도": (
-        "일자리집중도_인구천명당종사자수",
-        "주민 1,000명당 사업체 종사자 수(명)"
-    ),
-}
-factor_col, factor_axis_label = factor_map[selected_factor]
-
-
-quadrant = year_data[[
-    "자치구명", "20대인구천명당순이동자수", "30대인구천명당순이동자수"
-]].dropna().copy()
-quadrant["이동유형"] = quadrant.apply(classify_migration, axis=1)
-
-
-# -----------------------------------------------------------------------------
-# 화면 메뉴
-# -----------------------------------------------------------------------------
-selected_page = st.radio(
-    "분석 화면",
-    ["현재 현황", "영향 요인", "지역 비교", "정책 검토"],
-    horizontal=True,
-    label_visibility="collapsed",
+    focus_message = "선택한 자치구와 연령대가 모두 순유입 상태여서 집중 확인 대상 없이 변화 추이를 모니터링합니다."
+st.markdown(
+    f'<div class="insight-box"><b>핵심 메시지</b> · {selected_year}년 {age_label} 기준, '
+    f'{focus_message} '
+    f'서울 25개 구에서 <b>{relation_age_label} 순이동률</b>과 비교한 지표 중 <b>{relation_name}</b>의 관련성이 가장 크며 '
+    f'(r={corr:.2f}, {direction} 관계), 이 결과는 원인 판정이 아니라 다음에 확인할 항목을 정하는 단서입니다.</div>',
+    unsafe_allow_html=True,
 )
-st.caption("위 메뉴를 클릭하면 필요한 분석 화면만 볼 수 있습니다.")
 
-
-if selected_page == "현재 현황":
-    # -----------------------------------------------------------------------------
-    # 1~2. KPI와 산식
-    # -----------------------------------------------------------------------------
-    st.header("1. 현재 상태")
-    total_migration = year_data[count_col].sum()
-    average_rate = year_data[rate_col].mean()
-    positive_count = int((year_data[rate_col] >= 0).sum())
-    negative_count = int((year_data[rate_col] < 0).sum())
-    top = year_data.loc[year_data[rate_col].idxmax()]
-    bottom = year_data.loc[year_data[rate_col].idxmin()]
-
-    k1, k2, k3 = st.columns(3)
-    k1.metric(f"서울 {selected_age} 순이동자", f"{total_migration:+,.0f}명", help="25개 자치구 순이동자 수 합계")
-    k2.metric("평균 순이동률", f"{average_rate:+.1f}명", help="자치구 평균, 인구 1,000명당 명")
-    k3.metric("순유입 / 순유출 자치구", f"{positive_count}개 / {negative_count}개")
-    k4, k5, k6 = st.columns(3)
-    k4.metric("최대 순유입 지역", top["자치구명"], f"{top[rate_col]:+.1f}명/1,000명")
-    k5.metric("최대 순유출 지역", bottom["자치구명"], f"{bottom[rate_col]:+.1f}명/1,000명")
-    k6.metric("분석 자치구", "25개 구", help="서울특별시 전체 자치구")
-
-    st.markdown(
-        f'<div class="result-box"><b>현재 상태</b><br>{selected_year}년 서울 {selected_age}는 '
-        f'25개 자치구 중 {positive_count}개 구에서 순유입됐으며, '
-        f'{top["자치구명"]}의 순이동률이 인구 1,000명당 {top[rate_col]:+.1f}명으로 가장 높았습니다.</div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.expander("지표 산출 기준 보기"):
+st.markdown('<div class="section-head"><span class="section-no">03</span> 서울 전체 관계와 선택 구 해석</div>', unsafe_allow_html=True)
+relation_col, policy_col = st.columns([.9, 1.65])
+with relation_col:
+    with st.container(border=True):
+        st.markdown("#### 서울 전체 관계와 선택 구 위치")
         st.markdown(
-            rf"""
-            **인구 1,000명당 순이동자 수**  
-            $\\displaystyle 순이동률=\\frac{{전입자수-전출자수}}{{연앙\ 청년인구}}\\times1,000$
-
-            - 단위: 인구 1,000명당 명 / 양수는 순유입, 음수는 순유출
-            - 연앙 청년인구 = (전년도 말 인구 + 해당 연도 말 인구) ÷ 2
-
-            **전월세 월환산 주거비**  
-            $\\displaystyle 월환산\ 주거비=월세액+\\frac{{보증금\\times 전월세전환율}}{{12}}$
-
-            - 단위: 만원/월, 자치구·연도별 계약의 중앙값
-            - 전세와 월세를 단순 합산하지 않고 동일한 월 비용 단위로 환산
-            - 연도 말 법정 전월세전환율 적용: 2021년 3.00%, 2022년 5.25%, 2023년 5.50%, 2024년 5.00%
-            - 전월세 자료는 계약자의 연령을 제공하지 않아 전 연령 계약을 포함
-
-            **거주지 기준 고용률**  
-            $\\displaystyle 고용률=\\frac{{해당\ 연령대\ 취업자수}}{{해당\ 연령대\ 인구}}\\times100$
-
-            - 단위: %, 20대 분석에는 15~29세, 30대 분석에는 30~49세 고용률 사용
-            - 순이동 연령 구간과 정확히 일치하지 않는 한계가 있음
-
-            **일자리 집중도**  
-
-            $\\displaystyle 일자리\\ 집중도=\\frac{{사업체\\ 종사자\\ 수}}{{전체\\ 주민등록인구}}\\times1,000$
-
-            - 단위: 주민 1,000명당 종사자 수(명)
-            - 분자는 자치구 소재 사업체의 근무지 기준 종사자 수
-            - 분모는 각 연도 말 전체 주민등록인구(외국인 제외)
-            """
-        )
-
-    st.divider()
-
-
-if selected_page == "영향 요인":
-    # -----------------------------------------------------------------------------
-    # 3. 세 환경지표 상관계수 비교
-    # -----------------------------------------------------------------------------
-    st.header("2. 청년 순이동은 어떤 지역 환경과 관련이 있을까?")
-    corr_specs = [
-        ("전월세 월환산 주거비", "전월세월환산주거비중앙값_만원"),
-        (employment_name, employment_col),
-        ("일자리 집중도", "일자리집중도_인구천명당종사자수"),
-    ]
-    corr_table = pd.DataFrame(
-        [{"지표": name, "상관계수": safe_corr(year_data, col, rate_col)} for name, col in corr_specs]
-    ).dropna(subset=["상관계수"])
-
-    if corr_table.empty:
-        st.warning("유효한 관측값이 부족해 환경지표 상관계수를 계산할 수 없습니다.")
-    else:
-        strongest = corr_table.loc[corr_table["상관계수"].abs().idxmax()]
-        corr_plot = corr_table.sort_values("상관계수")
-        colors = [ACCENT if name == strongest["지표"] else MUTED for name in corr_plot["지표"]]
-        fig, ax = plt.subplots(figsize=(7.4, 3.1))
-        bars = ax.barh(corr_plot["지표"], corr_plot["상관계수"], color=colors)
-        ax.axvline(0, color=TEXT, linewidth=1)
-        ax.set_xlim(-1, 1)
-        ax.bar_label(bars, labels=[f"{corr_strength(v)} {corr_direction(v)}" for v in corr_plot["상관계수"]], padding=4, fontsize=10)
-        style_axis(
-            ax,
-            f"{selected_year}년 {selected_age} 순이동은 {strongest['지표']}과 가장 큰 관련성을 보임",
-            "관련성의 방향과 정도  ← 반대 방향 | 같은 방향 →",
-            "",
-            "x",
-        )
-        st.pyplot(fig, use_container_width=False)
-        plt.close(fig)
-        st.caption("막대가 가운데에서 멀수록 두 지표가 함께 움직이는 경향이 큽니다. 이는 원인을 뜻하지 않습니다.")
-        st.markdown(
-            f'<div class="result-box"><b>분석 결과</b><br>{strongest["지표"]}이 '
-            f'{selected_age} 순이동률과 가장 높은 관련성을 보였습니다 '
-            f'({corr_strength(strongest["상관계수"])} · {corr_direction(strongest["상관계수"])}).</div>',
+            f'<div class="panel-question">자동 선택: <b>{relation_age_label} 순이동 × {relation_name}</b> · 연령대별 후보 중 |r| 최대</div>',
             unsafe_allow_html=True,
         )
-
-
-if selected_page == "영향 요인":
-    # -----------------------------------------------------------------------------
-    # 4. 선택 지표 산점도
-    # -----------------------------------------------------------------------------
-    st.subheader("선택 지표 세부 분석")
-    relation = year_data[["자치구명", factor_col, rate_col]].replace([np.inf, -np.inf], np.nan).dropna()
-    r_value = safe_corr(relation, factor_col, rate_col)
-
-    if len(relation) < 3 or pd.isna(r_value):
-        st.warning("선택한 지표의 유효한 자치구 자료가 부족합니다.")
-    else:
-        point_colors = [INFLOW if value >= 0 else OUTFLOW for value in relation[rate_col]]
-        fig, ax = plt.subplots(figsize=(7.2, 4.2))
-        ax.scatter(relation[factor_col], relation[rate_col], c=point_colors, s=68, alpha=.88, edgecolor="white")
-        if relation[factor_col].nunique() >= 2:
-            slope, intercept = np.polyfit(relation[factor_col], relation[rate_col], 1)
-            xs = np.linspace(relation[factor_col].min(), relation[factor_col].max(), 100)
-            ax.plot(xs, slope * xs + intercept, color=TEXT, linestyle="--", linewidth=1.3)
-        ax.axhline(0, color=TEXT, linewidth=1)
-        add_point_labels(ax, relation, factor_col, rate_col, "자치구명", limit=10)
-        trend_word = "높은" if r_value > 0 else "낮은"
-        style_axis(
-            ax,
-            f"{selected_factor}이 높은 자치구일수록 {selected_age} 순이동률이 {trend_word} 경향 · "
-            f"{corr_strength(r_value)} · {corr_direction(r_value)}",
-            factor_axis_label,
-            f"{selected_age} 인구 1,000명당 순이동자 수(명)",
-        )
-        st.pyplot(fig, use_container_width=False)
-        plt.close(fig)
-        st.caption(
-            "점 하나는 서울의 자치구 한 곳입니다. 파란색은 순유입, 붉은색은 순유출이며 "
-            "점선은 전체 경향을 나타냅니다."
-        )
-        st.markdown(
-            '<div class="policy-box"><b>해석 주의</b><br>상관관계는 자치구 특성이 함께 나타나는 '
-            '경향을 보여줄 뿐, 개인의 이사 원인이나 정책 효과를 직접 증명하지 않습니다.</div>',
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-
-
-if selected_page == "지역 비교":
-    # -----------------------------------------------------------------------------
-    # 5. 상·하위 5개 구 비교
-    # -----------------------------------------------------------------------------
-    st.header("3. 순이동 상위·하위 지역은 무엇이 다를까?")
-    top5 = year_data.nlargest(5, rate_col)
-    bottom5 = year_data.nsmallest(5, rate_col)
-
-    comparison_rows = []
-    for label, column, unit, group in [
-        ("전월세 월환산 주거비", "전월세월환산주거비중앙값_만원", "%", "주거"),
-        ("일자리 집중도", "일자리집중도_인구천명당종사자수", "%", "고용·일자리"),
-        (employment_name, employment_col, "%p", "고용·일자리"),
-    ]:
-        top_mean = top5[column].mean()
-        bottom_mean = bottom5[column].mean()
-        difference = top_mean - bottom_mean if unit == "%p" else pct_difference(top_mean, bottom_mean)
-        comparison_rows.append({"지표": label, "차이": difference, "단위": unit, "분류": group})
-
-    comparison = pd.DataFrame(comparison_rows).dropna(subset=["차이"])
-    if comparison.empty:
-        st.warning("상·하위 지역 특성 비교에 필요한 자료가 부족합니다.")
-    else:
-        fig, ax = plt.subplots(figsize=(7.4, 3.2))
-        comp_colors = [HOUSING if group == "주거" else JOB for group in comparison["분류"]]
-        bars = ax.barh(comparison["지표"], comparison["차이"], color=comp_colors)
-        ax.axvline(0, color=TEXT, linewidth=1)
-        labels = [f"{v:+.1f}{u}" for v, u in zip(comparison["차이"], comparison["단위"])]
-        ax.bar_label(bars, labels=labels, padding=4, fontsize=10)
-        strongest_diff = comparison.loc[comparison["차이"].abs().idxmax(), "지표"]
-        style_axis(
-            ax,
-            f"{selected_year}년 {selected_age} 순이동 상·하위 지역의 가장 큰 차이는 {strongest_diff}",
-            "하위 5개 구 대비 상위 5개 구의 차이  ← 낮음 | 높음 →",
-            "",
-            "x",
-        )
-        st.pyplot(fig, use_container_width=False)
+        relation = year_data[["자치구명", relation_column, relation_rate_col]].dropna()
+        fig, ax = plt.subplots(figsize=(5.2, 4.55))
+        ax.scatter(relation[relation_column], relation[relation_rate_col], s=38, color="#B8C4CD", alpha=.72, edgecolors="white", linewidths=.6)
+        label_offsets = [(7, 8), (7, -14), (7, 8), (7, -14), (7, 16)]
+        for i, district in enumerate(selected_districts):
+            row = relation[relation["자치구명"] == district]
+            edge = "#28343D" if focus_enabled and district == target_name else "white"
+            ax.scatter(row[relation_column], row[relation_rate_col], s=105, color=district_colors[district], edgecolors=edge, linewidths=1.3, zorder=3)
+            if not row.empty:
+                offset = label_offsets[i % len(label_offsets)]
+                ax.annotate(
+                    district,
+                    (row[relation_column].iloc[0], row[relation_rate_col].iloc[0]),
+                    xytext=offset,
+                    textcoords="offset points",
+                    fontsize=8,
+                    color="#44525D",
+                    bbox=dict(boxstyle="round,pad=.18", facecolor="white", edgecolor="none", alpha=.9),
+                )
+        slope, intercept = np.polyfit(relation[relation_column], relation[relation_rate_col], 1)
+        xs = np.linspace(relation[relation_column].min(), relation[relation_column].max(), 100)
+        ax.plot(xs, slope * xs + intercept, color="#91A6B5", linestyle=(0, (4, 4)), linewidth=1.25)
+        ax.text(.02, .97, f"Pearson r = {corr:.2f}", transform=ax.transAxes, ha="left", va="top", fontsize=8.5, color=TEXT)
+        ax.axhline(0, color="#9DB0BE", linewidth=1, linestyle=(0, (3, 3)))
+        ax.set_xlabel(f"{relation_name}({relation_unit}) →", fontsize=9)
+        ax.set_ylabel(f"{relation_age_label} 인구 1,000명당 순이동(명) →", fontsize=9)
+        if relation_unit == "명":
+            ax.xaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}"))
+        clean_axis(ax)
+        ax.spines["bottom"].set_visible(False)
+        fig.tight_layout()
+        st.pyplot(fig, width="stretch")
         plt.close(fig)
 
-        result_parts = [f"{row['지표']} {row['차이']:+.1f}{row['단위']}" for _, row in comparison.iterrows()]
-        st.markdown(
-            f'<div class="result-box"><b>분석 결과</b><br>순이동 상위 5개 구는 하위 5개 구와 비교해 '
-            f'{", ".join(result_parts)}의 차이를 보였습니다.<br><small>상위: '
-            f'{", ".join(top5["자치구명"])} / 하위: {", ".join(bottom5["자치구명"])}</small></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div class="policy-box"><b>정책 활용</b><br>차이가 큰 환경지표를 우선 점검하되, '
-            '이 비교만으로 해당 지표가 순이동의 원인이라고 단정하지 않습니다.</div>',
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-
-
-if selected_page == "지역 비교":
-    # -----------------------------------------------------------------------------
-    # 6. 20대·30대 사분면
-    # -----------------------------------------------------------------------------
-    st.header("4. 20대와 30대의 이동 방향이 다른 지역은 어디일까?")
-    quadrant = year_data[[
-        "자치구명", "20대인구천명당순이동자수", "30대인구천명당순이동자수"
-    ]].dropna().copy()
-    quadrant["이동유형"] = quadrant.apply(classify_migration, axis=1)
-    mixed_mask = quadrant["이동유형"].isin(["20대 유입·30대 유출형", "20대 유출·30대 유입형"])
-
-    fig, ax = plt.subplots(figsize=(7.2, 4.8))
-    ax.scatter(
-        quadrant.loc[~mixed_mask, "20대인구천명당순이동자수"],
-        quadrant.loc[~mixed_mask, "30대인구천명당순이동자수"],
-        color=MUTED, s=64, alpha=.85,
-    )
-    ax.scatter(
-        quadrant.loc[mixed_mask, "20대인구천명당순이동자수"],
-        quadrant.loc[mixed_mask, "30대인구천명당순이동자수"],
-        color=ACCENT, s=88, edgecolor=TEXT, linewidth=.7,
-    )
-    ax.axhline(0, color=TEXT, linewidth=1)
-    ax.axvline(0, color=TEXT, linewidth=1)
-    add_point_labels(
-        ax, quadrant, "20대인구천명당순이동자수", "30대인구천명당순이동자수", "자치구명"
-    )
-    style_axis(
-        ax,
-        f"{selected_year}년에는 {int(mixed_mask.sum())}개 구에서 20대와 30대의 이동 방향이 다르게 나타남",
-        "20대 인구 1,000명당 순이동자 수(명)",
-        "30대 인구 1,000명당 순이동자 수(명)",
-    )
-    st.pyplot(fig, use_container_width=False)
-    plt.close(fig)
-
-    mixed_20_in = quadrant.loc[quadrant["이동유형"] == "20대 유입·30대 유출형", "자치구명"].tolist()
-    mixed_30_in = quadrant.loc[quadrant["이동유형"] == "20대 유출·30대 유입형", "자치구명"].tolist()
-    st.markdown(
-        f'<div class="result-box"><b>혼합형 지역</b><br>20대 유입·30대 유출형: '
-        f'{", ".join(mixed_20_in) if mixed_20_in else "없음"}<br>20대 유출·30대 유입형: '
-        f'{", ".join(mixed_30_in) if mixed_30_in else "없음"}</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="policy-box"><b>정책 활용</b><br>20대 유입·30대 유출형은 초기 청년 유입 이후 '
-        '가족 형성기 정착 여건을, 반대 유형은 초기 취업·주거 접근성을 우선 검토할 수 있습니다.</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-
-
-if selected_page == "현재 현황":
-    # -----------------------------------------------------------------------------
-    # 7. 자치구 순위
-    # -----------------------------------------------------------------------------
-    st.header("5. 어느 자치구에서 유입·유출이 가장 큰가?")
-    ranking = year_data.sort_values(rate_col).copy()
-    top_names = set(year_data.nlargest(5, rate_col)["자치구명"])
-    bottom_names = set(year_data.nsmallest(5, rate_col)["자치구명"])
-    bar_colors = []
-    for _, row in ranking.iterrows():
-        if row["자치구명"] in top_names:
-            bar_colors.append(INFLOW)
-        elif row["자치구명"] in bottom_names:
-            bar_colors.append(OUTFLOW)
+with policy_col:
+    policy_cards = []
+    for district in selected_districts:
+        row = selected_rows[selected_rows["자치구명"] == district].iloc[0]
+        history = data[(data["자치구명"] == district) & (data["연도"].isin(recent_years))].sort_values("연도")
+        out20, out30, clues, policies = policy_diagnosis(row, history, year_data, selected_age)
+        if selected_age == "20대":
+            persistence = f"최근 {len(recent_years)}년 중 20대 {out20}년 순유출"
+        elif selected_age == "30대":
+            persistence = f"최근 {len(recent_years)}년 중 30대 {out30}년 순유출"
         else:
-            bar_colors.append("#D5DAE0")
-
-    fig, ax = plt.subplots(figsize=(7.4, 6.2))
-    bars = ax.barh(ranking["자치구명"], ranking[rate_col], color=bar_colors)
-    ax.axvline(0, color=TEXT, linewidth=1)
-    ax.bar_label(bars, labels=[f"{v:+.1f}" for v in ranking[rate_col]], padding=3, fontsize=8)
-    style_axis(
-        ax,
-        f"{selected_year}년 {selected_age}는 {top['자치구명']}에서 순유입률이 가장 높고, "
-        f"{bottom['자치구명']}에서 가장 낮음",
-        "인구 1,000명당 순이동자 수(명)",
-        "자치구",
-        "x",
-    )
-    st.pyplot(fig, use_container_width=False)
-    plt.close(fig)
-    st.caption("자치구별 청년 인구 규모 차이를 보정하기 위해 순이동자 수가 아닌 인구 1,000명당 지표를 사용했습니다.")
-
-    st.divider()
-
-
-if selected_page == "현재 현황":
-    # -----------------------------------------------------------------------------
-    # 8. 연도별 지속성
-    # -----------------------------------------------------------------------------
-    st.header("6. 이러한 이동은 지속되고 있을까?")
-    selected_district = st.selectbox(
-        "상세 조회 지역",
-        ["서울 전체"] + districts,
-        help="선택한 지역에 따라 바로 아래 연도별 추이 그래프와 지속성 진단이 바뀝니다.",
-    )
-    st.caption("이 선택은 아래 연도별 추이와 지속성 진단에만 적용됩니다.")
-    if selected_district == "서울 전체":
-        trend = data.groupby("연도", as_index=False)[["20대순이동자수", "30대순이동자수"]].sum()
-        y20, y30 = "20대순이동자수", "30대순이동자수"
-        ylabel = "순이동자 수(명)"
-        trend_place = "서울 전체"
-    else:
-        trend = data[data["자치구명"] == selected_district].sort_values("연도")
-        y20, y30 = "20대인구천명당순이동자수", "30대인구천명당순이동자수"
-        ylabel = "인구 1,000명당 순이동자 수(명)"
-        trend_place = selected_district
-
-    fig, ax = plt.subplots(figsize=(7.4, 3.8))
-    for column, label, color in [(y20, "20대", INFLOW), (y30, "30대", OUTFLOW)]:
-        ax.plot(trend["연도"], trend[column], marker="o", linewidth=2.2, label=label, color=color)
-        for x, y in zip(trend["연도"], trend[column]):
-            ax.annotate(f"{y:+,.1f}", (x, y), xytext=(0, 8), textcoords="offset points", ha="center", fontsize=8)
-    ax.axhline(0, color=TEXT, linewidth=1, linestyle="--")
-    ax.set_xticks(trend["연도"])
-    ax.legend(title="연령대", frameon=False)
-    style_axis(ax, f"{trend_place}의 20대·30대 순이동 변화", "연도", ylabel)
-    st.pyplot(fig, use_container_width=False)
-    plt.close(fig)
-
-    selected_history_col = y20 if selected_age == "20대" else y30
-    history_values = trend[selected_history_col].dropna()
-    positive_years = int((history_values > 0).sum())
-    negative_years = int((history_values < 0).sum())
-    sign_changes = int((np.sign(history_values).diff().fillna(0) != 0).sum())
-    if positive_years >= 3:
-        persistence = f"{positive_years}년간 순유입이 나타난 지속 유입 지역"
-    elif negative_years >= 3:
-        persistence = f"{negative_years}년간 순유출이 나타난 지속 유출 지역"
-    elif sign_changes >= 2:
-        persistence = "순유입·순유출 방향이 자주 바뀐 변동 지역"
-    else:
-        persistence = "한 방향의 지속성이 뚜렷하지 않은 지역"
+            persistence = f"최근 {len(recent_years)}년 중 20대 {out20}년·30대 {out30}년 순유출"
+        clue_items = "".join(f"<div>• {item}</div>" for item in [persistence] + clues.split(", "))
+        policy_tags = "".join(f'<span class="policy-tag">{policy}</span>' for policy in policies[:3])
+        focus = focus_enabled and district == target_name
+        policy_cards.append(
+            f'<div class="policy-card {"focus" if focus else ""}">'
+            f'{"<span class=\"focus-badge\">집중 확인</span>" if focus else ""}'
+            f'<div class="policy-name" style="color:{district_colors[district]}">{district}</div>'
+            f'<div class="policy-type">{movement_type(row)}</div>'
+            f'<div class="policy-title" style="color:{district_colors[district]}">해석 근거</div>'
+            f'<div class="policy-clues">{clue_items}</div>'
+            f'<div class="policy-title" style="color:{district_colors[district]}">우선 검토</div>'
+            f'<div class="policy-tags">{policy_tags}</div></div>'
+        )
+    policy_columns = len(policy_cards) if len(policy_cards) <= 3 else 2
+    policy_min_height = 485 if len(policy_cards) <= 3 else 280
     st.markdown(
-        f'<div class="result-box"><b>지속성 진단</b><br>{trend_place}은(는) 분석 기간 기준 '
-        f'{selected_age} {persistence}입니다.</div>',
+        f'<div class="policy-grid" style="grid-template-columns:repeat({policy_columns}, minmax(0, 1fr)); --policy-min-height:{policy_min_height}px;">'
+        + "".join(policy_cards) + '</div>',
         unsafe_allow_html=True,
     )
 
-    st.divider()
-
-
-if selected_page == "정책 검토":
-    # -----------------------------------------------------------------------------
-    # 9. 정책 우선 검토 지역
-    # -----------------------------------------------------------------------------
-    st.header("7. 정책 우선 검토 지역 요약")
-    policy = year_data[[
-        "자치구명", rate_col, employment_col, "일자리집중도_인구천명당종사자수",
-        "전월세월환산주거비중앙값_만원",
-    ]].copy()
-
-    # 최근 3개 연도의 선택 연령대 부호도 함께 사용합니다.
-    recent_years = sorted(data["연도"].dropna().unique())[-3:]
-    recent = data[data["연도"].isin(recent_years)]
-    persistent_out = (
-        recent.groupby("자치구명")[rate_col]
-        .apply(lambda values: values.notna().sum() >= 3 and (values < 0).all())
-    )
-
-    employment_q = year_data[employment_col].quantile(.25)
-    job_q75 = year_data["일자리집중도_인구천명당종사자수"].quantile(.75)
-    rate_q25 = year_data[rate_col].quantile(.25)
-    housing_q25 = year_data["전월세월환산주거비중앙값_만원"].quantile(.25)
-
-    policy_rows = []
-    for _, row in policy.iterrows():
-        district = row["자치구명"]
-        types = []
-        actions = []
-        if bool(persistent_out.get(district, False)):
-            types.append("지속 유출")
-            actions.append("종합 정착 여건")
-        quadrant_type = quadrant.loc[quadrant["자치구명"] == district, "이동유형"]
-        if not quadrant_type.empty and quadrant_type.iloc[0] == "20대 유입·30대 유출형":
-            types.append("20대 유입·30대 유출")
-            actions.append("가족 형성기 주거·생활환경")
-        if row[rate_col] < 0 and row[employment_col] <= employment_q:
-            types.append("낮은 고용·순유출")
-            actions.append("청년 고용 접근성")
-        if row[rate_col] <= rate_q25 and row["일자리집중도_인구천명당종사자수"] >= job_q75:
-            types.append("높은 일자리·낮은 유입")
-            actions.append("주거비·통근·직주 분리")
-        if row[rate_col] < 0 and row["전월세월환산주거비중앙값_만원"] <= housing_q25:
-            types.append("낮은 주거비·순유출")
-            actions.append("교통·생활환경 등 미포함 요인")
-        if types:
-            policy_rows.append({
-                "자치구": district,
-                "검토 유형": " / ".join(dict.fromkeys(types)),
-                "우선 확인할 정책": " / ".join(dict.fromkeys(actions)),
-                f"{selected_age} 순이동률(명/1,000명)": round(row[rate_col], 1),
-            })
-
-    policy_table = pd.DataFrame(policy_rows)
-    if policy_table.empty:
-        st.info("선택 조건의 자동 선별 기준에 해당하는 자치구가 없습니다.")
-    else:
-        policy_table["검토 기준 수"] = policy_table["검토 유형"].str.count("/") + 1
-        policy_table = policy_table.sort_values(
-            ["검토 기준 수", f"{selected_age} 순이동률(명/1,000명)"], ascending=[False, True]
-        )
-        st.dataframe(policy_table, hide_index=True, use_container_width=True)
-
-    st.markdown(
-        '<div class="policy-box"><b>활용 범위</b><br>이 표는 정책을 자동 결정하지 않습니다. '
-        '지속 유출, 연령대별 방향 차이, 고용·일자리·주거비 조건이 겹치는 지역을 '
-        '후속 조사 대상으로 선별하는 참고 자료입니다.</div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.expander("분석 한계와 데이터 기준"):
-        st.markdown(
-            """
-            - 전월세 거래에는 계약자의 연령 정보가 없어 전 연령 계약을 사용했습니다.
-            - 연도만 있는 원자료 특성상 계약 시점별 전환율 대신 연도 말 법정 전환율을 대표값으로 적용했습니다.
-            - 20대 순이동은 20~29세, 고용률은 15~29세이며 30대는 각각 30~39세와 30~49세입니다.
-            - 일자리 집중도는 근무지 기준 사업체 종사자 수를 연말 주민등록인구 1,000명당 값으로 환산했습니다.
-            - 상관관계와 상·하위 집단 비교는 인과관계를 뜻하지 않습니다.
-            """
-        )
-
-    st.caption(
-        "순이동자 수 = 전입자 수 − 전출자 수. 모든 금액은 만원, 주거비는 만원/월, "
-        "고용률은 %, 집단 간 고용률 차이는 %p로 표시했습니다."
-    )
+st.markdown(
+    '<div class="footnote">※ 전세환산 주거비는 전 연령 계약을 5.0% 고정 전환율로 환산한 중앙값이며, '
+    '사업체 종사자수는 근무지 기준 전체 연령 절대값입니다. '
+    '20대 참고 고용률은 15–29세, 30대 참고 고용률은 30–49세로 순이동 연령과 일치하지 않습니다. '
+    '|r| 최대 지표와 우선 검토 항목은 탐색 결과이며 인과관계나 정책 효과를 의미하지 않습니다.</div>',
+    unsafe_allow_html=True,
+)
