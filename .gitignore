@@ -10,3 +10,4 @@ tmp/
 
 results/presentation/*
 !results/presentation/*.pdf
+results/presentation/발표대본_*
