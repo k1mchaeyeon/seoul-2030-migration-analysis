@@ -3,6 +3,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from matplotlib.lines import Line2D
 from matplotlib.ticker import StrMethodFormatter
 import numpy as np
@@ -21,9 +22,18 @@ TEXT = "#5B6974"
 GRID = "#E8EDF1"
 COLORS = ["#3976A8", "#C97945", "#5B8E71", "#8A6F9E", "#B4953F"]
 
+
+def get_korean_font():
+    installed_fonts = {font.name for font in font_manager.fontManager.ttflist}
+    for font_name in ["AppleGothic", "NanumGothic", "Noto Sans CJK KR", "Malgun Gothic"]:
+        if font_name in installed_fonts:
+            return font_name
+    return "DejaVu Sans"
+
+
 st.set_page_config(page_title="서울 20·30대 순이동 비교 대시보드", page_icon="🏙️", layout="wide")
 plt.rcParams.update({
-    "font.family": "AppleGothic",
+    "font.family": get_korean_font(),
     "axes.unicode_minus": False,
     "figure.facecolor": "white",
     "axes.facecolor": "white",
