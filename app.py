@@ -24,8 +24,14 @@ COLORS = ["#3976A8", "#C97945", "#5B8E71", "#8A6F9E", "#B4953F"]
 
 
 def get_korean_font():
+    # Streamlit Cloud에서는 설치된 나눔 글꼴을 Matplotlib에 직접 등록한다.
+    nanum_dir = Path("/usr/share/fonts/truetype/nanum")
+    if nanum_dir.exists():
+        for font_path in nanum_dir.glob("*.ttf"):
+            font_manager.fontManager.addfont(str(font_path))
+
     installed_fonts = {font.name for font in font_manager.fontManager.ttflist}
-    for font_name in ["AppleGothic", "NanumGothic", "Noto Sans CJK KR", "Malgun Gothic"]:
+    for font_name in ["NanumGothic", "AppleGothic", "Noto Sans CJK KR", "Malgun Gothic"]:
         if font_name in installed_fonts:
             return font_name
     return "DejaVu Sans"
