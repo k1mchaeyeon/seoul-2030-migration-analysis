@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>서울 20·30대 순이동 분석</title>
+<meta name="description" content="2021~2024년 서울 25개 자치구의 20대·30대 순이동을 주거비·고용 환경과 함께 비교한 분석">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.3/plotly.min.js"></script>
+<style>
+:root{--bg:#fafafa;--surface:#f0f0f1;--card:#fff;--text:#18181b;--muted:#71717a;--line:#e4e4e7;--accent:#2563eb;--c20:#2563eb;--c30:#d9480f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0c0c0d;--surface:#18181b;--card:#141416;--text:#f4f4f5;--muted:#a1a1aa;--line:#27272a;--accent:#60a5fa;--c20:#60a5fa;--c30:#fb923c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;line-height:1.6;word-break:keep-all}
+main{max-width:980px;margin:0 auto;padding:40px 16px 80px}
+a{color:var(--accent)}
+.k{font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--accent)}
+h1{font-size:28px;margin:6px 0 6px;line-height:1.3}
+.lead{color:var(--muted);margin:0 0 6px}
+.links{font-size:14px;color:var(--muted);margin-bottom:28px}
+.links a{margin-right:14px}
+h2{font-size:19px;margin:44px 0 6px;display:flex;gap:10px;align-items:baseline}
+h2 .no{font:600 13px ui-monospace,Menlo,monospace;color:var(--accent)}
+.q{color:var(--muted);margin:0 0 14px;font-size:14px}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.num{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.num strong{display:block;font-size:26px;font-variant-numeric:tabular-nums}
+.num span{color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:14px;margin-bottom:6px}
+.ctl label{color:var(--muted)}
+select,button.d{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+button.d{cursor:pointer;font-size:13px;padding:3px 9px}
+button.d[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.plot{width:100%;height:380px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500}
+.types{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.types .num strong{font-size:22px}
+.types p{margin:6px 0 0;font-size:13px;color:var(--muted)}
+ul.notes{padding-left:18px;color:var(--muted);font-size:14px}
+footer{margin-top:48px;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<div class="k">SEOUL · 2021–2024 · 25 DISTRICTS</div>
+<h1>서울 20·30대는 어디로 이동했나</h1>
+<p class="lead">25개 자치구의 20대·30대 순이동을 주거비·고용 환경과 함께 비교했습니다. 20대와 30대를 '청년'으로 묶으면 가려지는 차이를 공공 데이터로 확인하는 것이 목적입니다.</p>
+<div class="links"><a href="https://github.com/k1mchaeyeon/seoul-2030-migration-analysis">GitHub 저장소</a><a href="https://github.com/k1mchaeyeon/seoul-2030-migration-analysis/blob/main/results/presentation/%EC%84%9C%EC%9A%B8_20%C2%B730%EB%8C%80_%EC%88%9C%EC%9D%B4%EB%8F%99%EA%B3%BC_%EC%A3%BC%EA%B1%B0%EA%B3%A0%EC%9A%A9%ED%99%98%EA%B2%BD_%EB%B6%84%EC%84%9D_%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C.pdf">발표자료 PDF</a><a href="https://kimchaeyeon.dev">포트폴리오</a></div>
+
+<h2><span class="no">01</span>2024년, 묶으면 보이지 않는 숫자</h2>
+<p class="q">서울 전체 순이동자수(전입 − 전출)</p>
+<div class="nums" id="nums"></div>
+<div class="card"><div id="p-year" class="plot" style="height:320px"></div></div>
+
+<h2><span class="no">02</span>자치구별 순이동률</h2>
+<p class="q">순이동률 = 순이동자수 ÷ 연앙인구 × 1,000 (인구 1,000명당 순유입·순유출 인원)</p>
+<div class="card">
+ <div class="ctl"><label for="y2">연도</label><select id="y2"></select><label for="a2">연령대</label><select id="a2"><option>20대</option><option>30대</option></select></div>
+ <div id="p-dist" class="plot" style="height:520px"></div>
+</div>
+
+<h2><span class="no">03</span>이동 유형</h2>
+<p class="q">20대·30대 순이동률의 부호로 25개 구를 나눴습니다</p>
+<div class="ctl"><label for="y3">연도</label><select id="y3"></select></div>
+<div class="types" id="types"></div>
+
+<h2><span class="no">04</span>선택한 자치구 비교</h2>
+<p class="q">최대 4개 구를 골라 2021–2024 순이동률 추이를 비교합니다</p>
+<div class="card">
+ <div class="chips" id="chips"></div>
+ <div id="p-trend" class="plot"></div>
+</div>
+
+<h2><span class="no">05</span>주거비·고용과의 관계</h2>
+<p class="q">점 하나가 자치구 하나입니다. r은 25개 구 기준 상관계수입니다</p>
+<div class="card">
+ <div class="ctl"><label for="y5">연도</label><select id="y5"></select></div>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px">
+  <div id="p-s20" class="plot"></div><div id="p-s30" class="plot"></div>
+ </div>
+</div>
+
+<h2><span class="no">06</span>세 가지 예상과 결과 (2024년 기준)</h2>
+<div class="card"><table>
+<thead><tr><th>분석 전 예상</th><th>확인한 결과</th><th>판정</th></tr></thead>
+<tbody>
+<tr><td>20대와 30대는 이동 방향이 다를 것이다</td><td>20대 순유입, 30대 순유출. 18개 구에서 20대 유입·30대 유출</td><td>지지</td></tr>
+<tr><td>주거비가 높은 구일수록 30대 순이동률이 낮을 것이다</td><td>예상과 반대 방향 (r = <span id="r30"></span>)</td><td>지지되지 않음</td></tr>
+<tr><td>고용 여건이 좋은 구일수록 20대 순이동률이 높을 것이다</td><td>15–29세 참고 고용률과 함께 증가 (r = <span id="r20"></span>)</td><td>부분 지지</td></tr>
+</tbody></table></div>
+
+<h2><span class="no">07</span>해석할 때 주의할 점</h2>
+<ul class="notes">
+<li>전세환산 주거비: 전세는 보증금, 월세는 보증금 + 월세×12÷0.05로 환산한 뒤 자치구 중앙값을 썼습니다. 5.0%는 연도 간 비교를 위한 고정 전환율입니다.</li>
+<li>전월세 계약 자료에는 계약자의 연령이 없습니다.</li>
+<li>고용률은 20대에 15–29세, 30대에 30–49세 자료를 참고지표로 썼습니다. 연령 구간이 정확히 일치하지 않습니다.</li>
+<li>상관관계는 개인의 이사 원인이나 정책 효과를 뜻하지 않습니다. 실제 이동 이유를 알려면 전출 사유·가구·소득·주택 종류·통근 자료가 더 필요합니다.</li>
+<li>자료 5종: 국내인구이동, 주민등록인구, 전월세 실거래, 사업체조사, 지역별고용조사 (2021–2024, 25개 자치구 100행)</li>
+</ul>
+<footer>김채연 · 개인 프로젝트 · 원본 분석은 Python(pandas, matplotlib)과 Streamlit, 이 페이지는 같은 결과 데이터로 만든 정적 버전입니다.</footer>
+</main>
+<script>
+const D=[{"y":2021,"d":"강남구","n20":-328,"n30":-2951,"r20":-4.53,"r30":-37.0,"rent":36150.0,"e1529":38.8},{"y":2021,"d":"강동구","n20":1985,"n30":453,"r20":32.56,"r30":6.33,"rent":19000.0,"e1529":46.35},{"y":2021,"d":"강북구","n20":-326,"n30":-1658,"r20":-7.77,"r30":-43.7,"rent":13000.0,"e1529":45.8},{"y":2021,"d":"강서구","n20":4952,"n30":-2442,"r20":57.37,"r30":-24.81,"rent":18400.0,"e1529":49.1},{"y":2021,"d":"관악구","n20":7895,"n30":-6853,"r20":72.67,"r30":-79.53,"rent":13640.0,"e1529":49.65},{"y":2021,"d":"광진구","n20":2470,"n30":-2831,"r20":39.66,"r30":-51.15,"rent":17000.0,"e1529":44.1},{"y":2021,"d":"구로구","n20":1340,"n30":-1959,"r20":24.56,"r30":-31.54,"rent":15000.0,"e1529":48.4},{"y":2021,"d":"금천구","n20":2910,"n30":-207,"r20":78.3,"r30":-5.75,"rent":15195.0,"e1529":54.75},{"y":2021,"d":"노원구","n20":-3072,"n30":-441,"r20":-42.92,"r30":-6.9,"rent":20000.0,"e1529":36.349999999999994},{"y":2021,"d":"도봉구","n20":-783,"n30":-1217,"r20":-18.44,"r30":-30.33,"rent":16000.0,"e1529":47.25},{"y":2021,"d":"동대문구","n20":2114,"n30":-1118,"r20":37.55,"r30":-22.54,"rent":16120.0,"e1529":38.75},{"y":2021,"d":"동작구","n20":2280,"n30":-2641,"r20":34.7,"r30":-42.97,"rent":16600.0,"e1529":42.75},{"y":2021,"d":"마포구","n20":3574,"n30":-1660,"r20":57.99,"r30":-25.92,"rent":20000.0,"e1529":48.75},{"y":2021,"d":"서대문구","n20":690,"n30":-1275,"r20":13.9,"r30":-28.54,"rent":18375.0,"e1529":41.95},{"y":2021,"d":"서초구","n20":-1026,"n30":-2361,"r20":-19.16,"r30":-38.46,"rent":34000.0,"e1529":38.65},{"y":2021,"d":"성동구","n20":695,"n30":-1893,"r20":15.71,"r30":-39.55,"rent":26250.0,"e1529":41.2},{"y":2021,"d":"성북구","n20":117,"n30":-694,"r20":1.77,"r30":-11.74,"rent":18280.0,"e1529":36.75},{"y":2021,"d":"송파구","n20":1127,"n30":-3069,"r20":12.21,"r30":-28.26,"rent":25000.0,"e1529":43.5},{"y":2021,"d":"양천구","n20":-1392,"n30":-935,"r20":-23.76,"r30":-16.48,"rent":23000.0,"e1529":35.25},{"y":2021,"d":"영등포구","n20":4883,"n30":-1583,"r20":82.93,"r30":-22.83,"rent":19400.0,"e1529":51.55},{"y":2021,"d":"용산구","n20":1745,"n30":-756,"r20":52.67,"r30":-19.95,"rent":23100.0,"e1529":48.400000000000006},{"y":2021,"d":"은평구","n20":1211,"n30":-1158,"r20":18.3,"r30":-17.09,"rent":16000.0,"e1529":46.0},{"y":2021,"d":"종로구","n20":350,"n30":-731,"r20":15.15,"r30":-37.09,"rent":19000.0,"e1529":38.25},{"y":2021,"d":"중구","n20":1028,"n30":-487,"r20":55.73,"r30":-24.35,"rent":21400.0,"e1529":43.400000000000006},{"y":2021,"d":"중랑구","n20":1081,"n30":-1359,"r20":19.61,"r30":-23.6,"rent":15000.0,"e1529":47.25},{"y":2022,"d":"강남구","n20":359,"n30":-1011,"r20":5.17,"r30":-13.19,"rent":37000.0,"e1529":40.55},{"y":2022,"d":"강동구","n20":1159,"n30":-966,"r20":19.57,"r30":-13.76,"rent":21712.0,"e1529":46.55},{"y":2022,"d":"강북구","n20":742,"n30":-1382,"r20":18.35,"r30":-37.84,"rent":14600.0,"e1529":44.2},{"y":2022,"d":"강서구","n20":4218,"n30":-2018,"r20":50.11,"r30":-20.65,"rent":19200.0,"e1529":54.0},{"y":2022,"d":"관악구","n20":11963,"n30":-4717,"r20":109.52,"r30":-54.59,"rent":14420.0,"e1529":56.3},{"y":2022,"d":"광진구","n20":3166,"n30":-1970,"r20":51.97,"r30":-36.01,"rent":18440.0,"e1529":51.55},{"y":2022,"d":"구로구","n20":2591,"n30":361,"r20":48.64,"r30":5.89,"rent":18000.0,"e1529":48.7},{"y":2022,"d":"금천구","n20":2568,"n30":-809,"r20":69.77,"r30":-21.86,"rent":15400.0,"e1529":62.650000000000006},{"y":2022,"d":"노원구","n20":-896,"n30":-569,"r20":-13.0,"r30":-9.1,"rent":20000.0,"e1529":38.6},{"y":2022,"d":"도봉구","n20":-381,"n30":-809,"r20":-9.42,"r30":-20.86,"rent":17500.0,"e1529":45.400000000000006},{"y":2022,"d":"동대문구","n20":2301,"n30":-727,"r20":40.91,"r30":-14.9,"rent":17320.0,"e1529":37.599999999999994},{"y":2022,"d":"동작구","n20":3492,"n30":-2423,"r20":54.1,"r30":-40.16,"rent":17000.0,"e1529":47.65},{"y":2022,"d":"마포구","n20":3386,"n30":-1689,"r20":55.75,"r30":-26.69,"rent":21160.0,"e1529":46.4},{"y":2022,"d":"서대문구","n20":2144,"n30":38,"r20":43.88,"r30":0.86,"rent":19000.0,"e1529":42.849999999999994},{"y":2022,"d":"서초구","n20":227,"n30":-1638,"r20":4.45,"r30":-28.17,"rent":37120.0,"e1529":38.45},{"y":2022,"d":"성동구","n20":1241,"n30":-1145,"r20":28.99,"r30":-24.76,"rent":29400.0,"e1529":46.2},{"y":2022,"d":"성북구","n20":1700,"n30":-537,"r20":25.96,"r30":-9.25,"rent":19600.0,"e1529":38.45},{"y":2022,"d":"송파구","n20":2781,"n30":-303,"r20":31.28,"r30":-2.86,"rent":25200.0,"e1529":43.5},{"y":2022,"d":"양천구","n20":-1137,"n30":-672,"r20":-20.27,"r30":-12.24,"rent":25460.0,"e1529":41.0},{"y":2022,"d":"영등포구","n20":4882,"n30":-1586,"r20":83.9,"r30":-22.81,"rent":23000.0,"e1529":54.349999999999994},{"y":2022,"d":"용산구","n20":1851,"n30":-246,"r20":57.32,"r30":-6.49,"rent":26000.0,"e1529":48.15},{"y":2022,"d":"은평구","n20":1476,"n30":-1250,"r20":23.01,"r30":-18.8,"rent":18000.0,"e1529":46.7},{"y":2022,"d":"종로구","n20":684,"n30":-583,"r20":30.34,"r30":-30.04,"rent":19536.0,"e1529":38.5},{"y":2022,"d":"중구","n20":911,"n30":-484,"r20":50.71,"r30":-24.35,"rent":22600.0,"e1529":44.099999999999994},{"y":2022,"d":"중랑구","n20":2261,"n30":-195,"r20":42.5,"r30":-3.4,"rent":17200.0,"e1529":51.099999999999994},{"y":2023,"d":"강남구","n20":2378,"n30":3356,"r20":35.08,"r30":43.47,"rent":38000.0,"e1529":39.2},{"y":2023,"d":"강동구","n20":1625,"n30":-229,"r20":28.4,"r30":-3.32,"rent":22850.0,"e1529":52.4},{"y":2023,"d":"강북구","n20":-88,"n30":-1516,"r20":-2.26,"r30":-42.75,"rent":15000.0,"e1529":51.55},{"y":2023,"d":"강서구","n20":3346,"n30":-3369,"r20":41.34,"r30":-34.68,"rent":19500.0,"e1529":58.349999999999994},{"y":2023,"d":"관악구","n20":6851,"n30":-6170,"r20":62.94,"r30":-70.24,"rent":15200.0,"e1529":57.25},{"y":2023,"d":"광진구","n20":2631,"n30":-2116,"r20":44.19,"r30":-38.6,"rent":19160.0,"e1529":51.7},{"y":2023,"d":"구로구","n20":1636,"n30":-1143,"r20":31.55,"r30":-18.64,"rent":17160.0,"e1529":48.1},{"y":2023,"d":"금천구","n20":2121,"n30":-1561,"r20":59.42,"r30":-41.41,"rent":16650.0,"e1529":64.3},{"y":2023,"d":"노원구","n20":-1015,"n30":-700,"r20":-15.13,"r30":-11.39,"rent":20000.0,"e1529":41.849999999999994},{"y":2023,"d":"도봉구","n20":-363,"n30":-955,"r20":-9.45,"r30":-25.16,"rent":17840.0,"e1529":47.25},{"y":2023,"d":"동대문구","n20":2871,"n30":174,"r20":50.77,"r30":3.55,"rent":19200.0,"e1529":36.85},{"y":2023,"d":"동작구","n20":3363,"n30":-1792,"r20":52.58,"r30":-29.94,"rent":19520.0,"e1529":50.15},{"y":2023,"d":"마포구","n20":2847,"n30":-562,"r20":47.84,"r30":-8.86,"rent":22400.0,"e1529":49.849999999999994},{"y":2023,"d":"서대문구","n20":1706,"n30":-226,"r20":35.08,"r30":-5.06,"rent":21000.0,"e1529":42.8},{"y":2023,"d":"서초구","n20":1666,"n30":867,"r20":33.34,"r30":15.25,"rent":38600.0,"e1529":39.5},{"y":2023,"d":"성동구","n20":1194,"n30":-305,"r20":28.73,"r30":-6.68,"rent":33500.0,"e1529":41.4},{"y":2023,"d":"성북구","n20":556,"n30":-1518,"r20":8.55,"r30":-26.69,"rent":21000.0,"e1529":38.650000000000006},{"y":2023,"d":"송파구","n20":2599,"n30":-877,"r20":30.22,"r30":-8.34,"rent":26400.0,"e1529":46.45},{"y":2023,"d":"양천구","n20":-1018,"n30":-683,"r20":-18.97,"r30":-12.74,"rent":25000.0,"e1529":42.900000000000006},{"y":2023,"d":"영등포구","n20":4924,"n30":-1053,"r20":85.86,"r30":-14.98,"rent":23000.0,"e1529":58.75},{"y":2023,"d":"용산구","n20":871,"n30":-1471,"r20":28.14,"r30":-38.99,"rent":26000.0,"e1529":48.65},{"y":2023,"d":"은평구","n20":2151,"n30":-211,"r20":34.47,"r30":-3.19,"rent":18400.0,"e1529":48.45},{"y":2023,"d":"종로구","n20":400,"n30":-606,"r20":18.27,"r30":-31.35,"rent":20200.0,"e1529":34.35},{"y":2023,"d":"중구","n20":1432,"n30":487,"r20":81.47,"r30":23.92,"rent":24225.0,"e1529":43.75},{"y":2023,"d":"중랑구","n20":1521,"n30":-1310,"r20":29.73,"r30":-22.68,"rent":18000.0,"e1529":54.0},{"y":2024,"d":"강남구","n20":1728,"n30":1901,"r20":25.81,"r30":23.75,"rent":36500.0,"e1529":39.05},{"y":2024,"d":"강동구","n20":3480,"n30":3807,"r20":61.77,"r30":53.8,"rent":24600.0,"e1529":46.650000000000006},{"y":2024,"d":"강북구","n20":-40,"n30":-1460,"r20":-1.08,"r30":-41.95,"rent":15065.0,"e1529":48.95},{"y":2024,"d":"강서구","n20":2987,"n30":-3547,"r20":38.64,"r30":-36.77,"rent":19800.0,"e1529":54.85},{"y":2024,"d":"관악구","n20":6845,"n30":-6213,"r20":64.81,"r30":-69.32,"rent":16000.0,"e1529":55.1},{"y":2024,"d":"광진구","n20":2387,"n30":-2617,"r20":41.25,"r30":-47.45,"rent":19400.0,"e1529":51.7},{"y":2024,"d":"구로구","n20":1176,"n30":-1502,"r20":23.71,"r30":-24.61,"rent":17700.0,"e1529":50.3},{"y":2024,"d":"금천구","n20":2260,"n30":-1813,"r20":65.94,"r30":-47.42,"rent":16900.0,"e1529":64.1},{"y":2024,"d":"노원구","n20":-1714,"n30":-649,"r20":-26.28,"r30":-10.66,"rent":20410.0,"e1529":39.849999999999994},{"y":2024,"d":"도봉구","n20":-140,"n30":-948,"r20":-3.83,"r30":-25.28,"rent":18200.0,"e1529":48.75},{"y":2024,"d":"동대문구","n20":1126,"n30":-775,"r20":20.03,"r30":-15.56,"rent":20080.0,"e1529":38.55},{"y":2024,"d":"동작구","n20":2475,"n30":-1689,"r20":39.34,"r30":-27.99,"rent":20000.0,"e1529":49.099999999999994},{"y":2024,"d":"마포구","n20":2477,"n30":-1264,"r20":42.67,"r30":-19.71,"rent":22400.0,"e1529":47.099999999999994},{"y":2024,"d":"서대문구","n20":465,"n30":-1115,"r20":9.76,"r30":-24.85,"rent":20000.0,"e1529":44.95},{"y":2024,"d":"서초구","n20":882,"n30":-43,"r20":17.84,"r30":-0.75,"rent":36600.0,"e1529":40.25},{"y":2024,"d":"성동구","n20":401,"n30":61,"r20":10.03,"r30":1.32,"rent":31800.0,"e1529":42.5},{"y":2024,"d":"성북구","n20":56,"n30":-1111,"r20":0.87,"r30":-19.85,"rent":20925.0,"e1529":35.75},{"y":2024,"d":"송파구","n20":2195,"n30":-258,"r20":26.5,"r30":-2.45,"rent":26600.0,"e1529":43.7},{"y":2024,"d":"양천구","n20":-1467,"n30":-603,"r20":-28.68,"r30":-11.41,"rent":25900.0,"e1529":38.6},{"y":2024,"d":"영등포구","n20":4398,"n30":-985,"r20":78.26,"r30":-13.7,"rent":24760.0,"e1529":59.45},{"y":2024,"d":"용산구","n20":268,"n30":-1772,"r20":9.26,"r30":-47.77,"rent":27000.0,"e1529":47.8},{"y":2024,"d":"은평구","n20":1289,"n30":-1818,"r20":21.29,"r30":-27.41,"rent":18461.5,"e1529":48.9},{"y":2024,"d":"종로구","n20":644,"n30":-427,"r20":30.34,"r30":-21.85,"rent":20000.0,"e1529":33.45},{"y":2024,"d":"중구","n20":819,"n30":-37,"r20":47.74,"r30":-1.74,"rent":25500.0,"e1529":44.55},{"y":2024,"d":"중랑구","n20":1564,"n30":-1347,"r20":32.05,"r30":-23.21,"rent":18400.0,"e1529":51.650000000000006}];
+const years=[...new Set(D.map(r=>r.y))].sort();
+const dists=[...new Set(D.map(r=>r.d))].sort((a,b)=>a.localeCompare(b,'ko'));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C20=()=>css('--c20'),C30=()=>css('--c30');
+const L=(extra)=>Object.assign({paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'Apple SD Gothic Neo, Noto Sans KR, sans-serif',color:css('--text'),size:12},margin:{l:56,r:12,t:28,b:40},xaxis:{gridcolor:css('--line'),zerolinecolor:css('--muted')},yaxis:{gridcolor:css('--line'),zerolinecolor:css('--muted')},legend:{orientation:'h',y:1.12}},extra||{});
+const CFG={displayModeBar:false,responsive:true};
+const fmt=n=>(n>0?'+':n<0?'−':'')+Math.abs(n).toLocaleString('ko-KR');
+const sum=(y,k)=>D.filter(r=>r.y===y).reduce((s,r)=>s+r[k],0);
+function corr(x,y){const n=x.length,mx=x.reduce((a,b)=>a+b)/n,my=y.reduce((a,b)=>a+b)/n;let sxy=0,sx=0,sy=0;for(let i=0;i<n;i++){sxy+=(x[i]-mx)*(y[i]-my);sx+=(x[i]-mx)**2;sy+=(y[i]-my)**2}return sxy/Math.sqrt(sx*sy)}
+function fill(id){const s=document.getElementById(id);years.forEach(y=>{const o=document.createElement('option');o.textContent=y;s.appendChild(o)});s.value=years[years.length-1];return s}
+// 01
+const y24=years[years.length-1],t20=sum(y24,'n20'),t30=sum(y24,'n30');
+document.getElementById('nums').innerHTML=`<div class="num"><strong style="color:var(--c20)">${fmt(t20)}명</strong><span>${y24}년 20대 순이동</span></div><div class="num"><strong style="color:var(--c30)">${fmt(t30)}명</strong><span>${y24}년 30대 순이동</span></div><div class="num"><strong>${fmt(t20+t30)}명</strong><span>둘을 합친 '청년' 전체</span></div>`;
+function pYear(){Plotly.react('p-year',[{type:'bar',name:'20대',x:years,y:years.map(y=>sum(y,'n20')),marker:{color:C20()}},{type:'bar',name:'30대',x:years,y:years.map(y=>sum(y,'n30')),marker:{color:C30()}}],L({barmode:'group',xaxis:{type:'category',gridcolor:css('--line')},yaxis:{title:'명',gridcolor:css('--line'),zerolinecolor:css('--muted')}}),CFG)}
+// 02
+const y2=fill('y2'),a2=document.getElementById('a2');
+function pDist(){const y=+y2.value,k=a2.value==='20대'?'r20':'r30';const rows=D.filter(r=>r.y===y).sort((a,b)=>a[k]-b[k]);
+ Plotly.react('p-dist',[{type:'bar',orientation:'h',y:rows.map(r=>r.d),x:rows.map(r=>r[k]),marker:{color:rows.map(r=>r[k]>=0?(a2.value==='20대'?C20():C30()):css('--muted'))},hovertemplate:'%{y}: %{x:.2f}‰<extra></extra>'}],L({margin:{l:72,r:12,t:10,b:40},xaxis:{title:'순이동률(‰)',gridcolor:css('--line'),zerolinecolor:css('--muted')},yaxis:{automargin:true}}),CFG)}
+y2.onchange=a2.onchange=pDist;
+// 03
+const y3=fill('y3');
+function types(){const y=+y3.value,rows=D.filter(r=>r.y===y);const g={'20대 유입·30대 유출':[],'동반 유출':[],'동반 유입':[],'20대 유출·30대 유입':[]};
+ rows.forEach(r=>{const k=r.r20>=0&&r.r30<0?'20대 유입·30대 유출':r.r20<0&&r.r30<0?'동반 유출':r.r20>=0&&r.r30>=0?'동반 유입':'20대 유출·30대 유입';g[k].push(r.d)});
+ document.getElementById('types').innerHTML=Object.entries(g).filter(([k,v])=>v.length).map(([k,v])=>`<div class="num"><strong>${v.length}개 구</strong><span>${k}</span><p>${v.join(' · ')}</p></div>`).join('')}
+y3.onchange=types;
+// 04
+let sel=['노원구','양천구','관악구'];
+function chips(){const c=document.getElementById('chips');c.innerHTML='';dists.forEach(d=>{const b=document.createElement('button');b.className='d';b.textContent=d;b.setAttribute('aria-pressed',sel.includes(d));b.onclick=()=>{if(sel.includes(d))sel=sel.filter(x=>x!==d);else if(sel.length<4)sel.push(d);chips();pTrend()};c.appendChild(b)})}
+function pTrend(){const tr=[];const dash=['solid','dot'];sel.forEach((d,i)=>{const rows=years.map(y=>D.find(r=>r.y===y&&r.d===d));
+ tr.push({type:'scatter',mode:'lines+markers',name:d+' 20대',x:years,y:rows.map(r=>r.r20),line:{color:C20(),dash:['solid','dash','dot','dashdot'][i]},hovertemplate:d+' 20대 %{x}: %{y:.2f}‰<extra></extra>'});
+ tr.push({type:'scatter',mode:'lines+markers',name:d+' 30대',x:years,y:rows.map(r=>r.r30),line:{color:C30(),dash:['solid','dash','dot','dashdot'][i]},hovertemplate:d+' 30대 %{x}: %{y:.2f}‰<extra></extra>'})});
+ Plotly.react('p-trend',tr,L({xaxis:{type:'category',gridcolor:css('--line')},yaxis:{title:'순이동률(‰)',gridcolor:css('--line'),zerolinecolor:css('--muted')},legend:{orientation:'h',y:-0.2}}),CFG)}
+// 05
+const y5=fill('y5');
+function pScatter(){const y=+y5.value,rows=D.filter(r=>r.y===y);
+ const mk=(id,xk,yk,col,xt,yt)=>{const x=rows.map(r=>r[xk]),v=rows.map(r=>r[yk]);const r=corr(x,v);
+  Plotly.react(id,[{type:'scatter',mode:'markers+text',x,y:v,text:rows.map(r=>r.d.replace(/구$/,'')),textposition:'top center',textfont:{size:10,color:css('--muted')},marker:{color:col,size:9},hovertemplate:'%{text}: %{x}, %{y:.2f}‰<extra></extra>'}],L({title:{text:`${yt} · r = ${r.toFixed(3)}`,font:{size:13}},showlegend:false,margin:{l:52,r:10,t:40,b:46},xaxis:{title:xt,gridcolor:css('--line')},yaxis:{title:'순이동률(‰)',gridcolor:css('--line'),zerolinecolor:css('--muted')}}),CFG);return r};
+ mk('p-s20','e1529','r20',C20(),'15–29세 고용률(%)','20대');
+ mk('p-s30','rent','r30',C30(),'전세환산 주거비 중앙값(만원)','30대')}
+y5.onchange=pScatter;
+const last=D.filter(r=>r.y===y24);
+document.getElementById('r30').textContent=corr(last.map(r=>r.rent),last.map(r=>r.r30)).toFixed(2);
+document.getElementById('r20').textContent=corr(last.map(r=>r.e1529),last.map(r=>r.r20)).toFixed(2);
+function all(){pYear();pDist();types();chips();pTrend();pScatter()}
+all();matchMedia('(prefers-color-scheme: dark)').addEventListener('change',all);
+</script>
+</body>
+</html>
